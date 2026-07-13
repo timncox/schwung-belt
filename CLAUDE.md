@@ -103,6 +103,19 @@ mode — audit for assigned-but-undeclared identifiers before shipping
 4. Feedback guard behavior with Move speaker + built-in mic.
 5. Chain UI: LED colors, tuner strip chase rate, HARD hold timing.
 
+## Operation-manual site
+
+https://timncox.github.io/schwung-belt/ — single-file `docs/index.html` on
+main:/docs (GitHub Pages via gh api). Design: soul-revue-poster / 70s pedal
+manual (cream paper, ink, burnt orange; Alfa Slab One + Karla + IBM Plex
+Mono) — deliberately NOT the mark/smack dark family. Interactive pad map
+(rows numbered from the TOP per [[feedback-move-pad-rows-top-down]]) +
+tuner-strip explainer; pad numbers/colors/behaviors mirror ui_chain.js —
+**update the page when the surface changes**. Accessibility: axe-core scan
+clean (contrast fixes: small accent text uses --rust not --acc; pad labels
+cream-on-darkened voice colors); skip link, landmarks, aria-live readout,
+visible focus, reduced-motion support. Re-run an axe pass after edits.
+
 ## Release process (two repos, one source)
 
 Source + `belt` distribution: this repo (timncox/schwung-belt).
