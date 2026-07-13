@@ -1,0 +1,118 @@
+{
+  "title": "Belt In",
+  "children": [
+    {
+      "title": "Overview",
+      "lines": [
+        "Live vocal",
+        "processor on the",
+        "mic, line-in, or",
+        "USB-C input.",
+        "",
+        "Autotune pitch",
+        "correction, up to",
+        "4 backing-vocal",
+        "harmonies in key,",
+        "a stereo doubler,",
+        "and formant shift.",
+        "",
+        "Load it in a slot,",
+        "sing, and Move",
+        "plays the band."
+      ]
+    },
+    {
+      "title": "Quick Start",
+      "lines": [
+        "1. Plug headphones",
+        " in (mic + Move",
+        " speaker howls).",
+        "2. Set Key + Scale",
+        " to your song.",
+        "3. Retune low =",
+        " natural, 0 =",
+        " hard-tune robot.",
+        "4. Pads 1-4 turn",
+        " harmony voices",
+        " on. Shift+pad",
+        " picks interval.",
+        "5. HARD pad =",
+        " instant T-Pain."
+      ]
+    },
+    {
+      "title": "Feedback Guard",
+      "lines": [
+        "If the speaker is",
+        "on with no line",
+        "cable, Belt In",
+        "mutes its output",
+        "to stop feedback.",
+        "",
+        "Monitor pad (73)",
+        "overrides. Best:",
+        "plug headphones",
+        "or line out in."
+      ]
+    },
+    {
+      "title": "Knobs",
+      "children": [
+        {
+          "title": "Main Knobs",
+          "lines": [
+            "1: Key",
+            "2: Scale",
+            "3: Retune speed",
+            " 0 = instant",
+            " high = gentle",
+            "4: Amount",
+            "5: Harmony level",
+            "6: Doubler",
+            "7: Formant",
+            " - deep + bright",
+            "8: Wet",
+            " corrected vs",
+            " dry lead"
+          ]
+        },
+        {
+          "title": "Shift Knobs",
+          "lines": [
+            "1: Humanize",
+            " keeps vibrato,",
+            " loosens voices",
+            "2: Flex",
+            " leaves slides",
+            " between notes",
+            " untouched",
+            "3: Spread",
+            " harmony stereo",
+            " width",
+            "4: Monitor"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Tips",
+      "lines": [
+        "Steps 1-12 are a",
+        "tuner: green in",
+        "tune, orange off.",
+        "Press one to set",
+        "the Key.",
+        "",
+        "Wet 0 + harmonies",
+        "on = natural lead",
+        "with tuned backup",
+        "singers.",
+        "",
+        "Sing into Mark's",
+        "looper with Belt",
+        "In upstream to",
+        "stack a choir."
+      ]
+    }
+  ]
+}

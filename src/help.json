@@ -1,0 +1,123 @@
+{
+  "title": "Belt",
+  "children": [
+    {
+      "title": "Overview",
+      "lines": [
+        "Live vocal",
+        "processor.",
+        "",
+        "Autotune pitch",
+        "correction, up to",
+        "4 backing-vocal",
+        "harmonies in key,",
+        "a stereo doubler,",
+        "and formant shift.",
+        "",
+        "Works in chain",
+        "slots and Master",
+        "FX. For the mic,",
+        "use Belt In."
+      ]
+    },
+    {
+      "title": "Quick Start",
+      "lines": [
+        "1. Set Key + Scale",
+        " to your song.",
+        "2. Retune low =",
+        " natural, 0 =",
+        " hard-tune robot.",
+        "3. Pads 1-4 turn",
+        " harmony voices",
+        " on. Shift+pad",
+        " picks interval.",
+        "4. HARD pad =",
+        " instant T-Pain.",
+        "",
+        "Steps 1-12 show",
+        "your note: green",
+        "in tune, orange",
+        "off. Press one to",
+        "set the Key."
+      ]
+    },
+    {
+      "title": "Knobs",
+      "children": [
+        {
+          "title": "Main Knobs",
+          "lines": [
+            "1: Key",
+            "2: Scale",
+            "3: Retune speed",
+            " 0 = instant",
+            " high = gentle",
+            "4: Amount",
+            "5: Harmony level",
+            "6: Doubler",
+            "7: Formant",
+            " - deep + bright",
+            "8: Wet",
+            " corrected vs",
+            " dry lead"
+          ]
+        },
+        {
+          "title": "Shift Knobs",
+          "lines": [
+            "1: Humanize",
+            " keeps vibrato,",
+            " loosens voices",
+            "2: Flex",
+            " leaves slides",
+            " between notes",
+            " untouched",
+            "3: Spread",
+            " harmony stereo",
+            " width",
+            "4: Monitor",
+            " (Belt In only)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Pads",
+      "lines": [
+        "68-71: harmony",
+        " voices 1-4.",
+        " Tap = on/off.",
+        " Shift+tap =",
+        " next interval.",
+        "76: HARD punch.",
+        " Tap = latch,",
+        " hold = while",
+        " held only.",
+        "73: Monitor",
+        " (Belt In only).",
+        "",
+        "Steps 13-16 show",
+        "active voices."
+      ]
+    },
+    {
+      "title": "Tips",
+      "lines": [
+        "Wet 0 + harmonies",
+        "on = natural lead",
+        "with tuned backup",
+        "singers.",
+        "",
+        "Doubler + a bit",
+        "of Humanize is",
+        "instant chorus",
+        "thickness.",
+        "",
+        "Formant down =",
+        "bigger, formant",
+        "up = brighter."
+      ]
+    }
+  ]
+}
