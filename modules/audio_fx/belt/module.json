@@ -219,6 +219,16 @@
           "name": "Setup",
           "params": [
             {
+              "key": "hard",
+              "name": "Hard Tune",
+              "type": "enum",
+              "options": [
+                "Off",
+                "On"
+              ],
+              "default": 0
+            },
+            {
               "key": "wet",
               "name": "Wet",
               "type": "float",
@@ -262,6 +272,7 @@
             }
           ],
           "knobs": [
+            "hard",
             "wet",
             "formant",
             "flex",

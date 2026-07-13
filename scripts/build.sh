@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-
 EOF
 fi
 
+rm -rf build/modules/audio_fx/belt build/modules/sound_generators/belt-in
 mkdir -p build/modules/audio_fx/belt build/modules/sound_generators/belt-in
 
 cp modules/audio_fx/belt/module.json src/ui_chain.js build/modules/audio_fx/belt/
