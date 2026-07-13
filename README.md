@@ -2,6 +2,8 @@
 
 **Live vocal processor for the Ableton Move** (a [schwung](https://github.com/charlesvestal/schwung) module).
 
+**📖 Operation manual: [timncox.github.io/schwung-belt](https://timncox.github.io/schwung-belt/)**
+
 Autotune-style pitch correction, up to four diatonic backing-vocal
 harmonies, a stereo doubler, and a formant knob — on the Move's own mic,
 line-in, or USB-C input. Named Belt because it makes you sound like you can.
