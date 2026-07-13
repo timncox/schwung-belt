@@ -225,7 +225,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between}
   <p class="billing rev">featuring <b>autotune correction</b> <span class="st">★</span>
   <b>four harmony voices</b> <span class="st">★</span> <b>the doubler</b>
   <span class="st">★</span> <b>formant shift</b> <span class="st">★</span>
-  <b>the HARD pad</b> <span class="st">★</span> one night only, every night</p>
+  <b>the HARD pad</b> <span class="st">★</span> <b>played harmony</b> <span class="st">★</span> one night only, every night</p>
   <p class="lede rev">Belt tunes your voice as you sing and puts
   <em>backing singers behind you</em> — scale-aware pitch correction from
   invisible to full robot, four harmony voices that follow your key, a
@@ -318,10 +318,14 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between}
       loosens the harmony voices — see below.</p>
     </div>
   </div>
-  <div class="note"><b>The HARD pad</b> (row 3, column 1) slams Retune 0 +
-  Amount 100 without touching your knobs: <b>tap</b> to latch it,
-  <b>hold</b> for just a phrase — it snaps back when you let go. Your
-  previous settings return either way.</div>
+  <div class="note"><b>HARD</b> is a real parameter (Perform page /
+  Shift+knob&nbsp;5): switch it on and Belt corrects instantly at full
+  depth — your Retune and Amount knobs are never touched, so switching
+  off lands exactly where you were. Three ways to fire it: the Perform
+  page anywhere knobs work (including Master&nbsp;FX), the editor pad
+  (row&nbsp;3, column&nbsp;1 — tap latches, hold is momentary), and
+  <b>MIDI control note&nbsp;0</b> from a clip or keyboard — a real
+  momentary punch you can sequence.</div>
 </div></section>
 
 <!-- ============ 03 HARMONIES ============ -->
@@ -352,6 +356,25 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between}
   <b>Humanize</b> loosens their tuning and timing drift. Harmonies duck
   automatically when you stop singing pitched material — backing singers
   don't harmonize your consonants.</p>
+  <h3 class="klayer">Played harmony (MIDI)</h3>
+  <p>With <b>MIDI Notes: Harmony</b> (the default), any notes arriving at
+  Belt's track — Move's pads in melodic or drum layout, <b>a sequenced
+  clip</b>, or an external keyboard — <em>become the harmony</em>: hold a
+  chord while you sing and the voices sing those exact notes as
+  formant-preserved copies of your voice, velocity setting their level
+  (<b>Vel&nbsp;Sens</b>). Release and the voices fall back to their
+  interval settings. Voices hold their chord tones as the chord changes —
+  no note-stealing wobble — and the sustain pedal works.</p>
+  <p><b>The sequencer trick:</b> put the chord progression in a clip on
+  Belt&nbsp;In's track. Clips keep playing under an overtake, so while
+  <a href="https://timncox.github.io/schwung-mark/">Mark</a> owns the
+  entire surface your harmonies still change on the grid, hands-free.</p>
+  <p><b>MIDI Notes: Target</b> flips the roles — the held note becomes the
+  note <em>you</em> are corrected to, regardless of scale. Play the melody,
+  sing approximately, land exactly.</p>
+  <p><b>Control notes</b> (the C-2 octave, far below any music): note 0 =
+  momentary HARD, note 1 = momentary full doubler, note 2 = momentary
+  harmony mute — sequenceable performance gestures.</p>
   <h3 class="klayer">Scales</h3>
   <p><b>Chromatic · Major · Minor · Harmonic&nbsp;Minor · Dorian ·
   Mixolydian · Major&nbsp;Pentatonic · Minor&nbsp;Pentatonic · Blues.</b>
@@ -384,7 +407,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between}
       green within 25 cents of target, orange when you're off. Unused pads stay dark.</div>
     </div>
     <div class="hwrow" role="group" aria-label="Other hardware controls">
-      <button class="hwbtn" data-t="Shift (hold)" data-d="Knob layer two: 1 Humanize, 2 Flex, 3 Spread, 4 Monitor. Shift+voice pad cycles that voice's interval. The screen relabels while held.">⇧ SHIFT — layer 2</button>
+      <button class="hwbtn" data-t="Shift (hold)" data-d="Knob layer two: 1 Humanize, 2 Flex, 3 Spread, 4 Monitor, 5 Hard Tune, 6 MIDI mode, 7 Vel Sens. Shift+voice pad cycles that voice's interval. The screen relabels while held.">⇧ SHIFT — layer 2</button>
       <button class="hwbtn" data-t="Screen" data-d="Header shows the note you're singing and how far off you are (e.g. A3 +12c), plus HARD when the punch is latched. Knob values live-update below.">▤ SCREEN — live tuner</button>
     </div>
   </div>
@@ -529,9 +552,11 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between}
     <div><div class="k">Audio</div><div class="v">44.1 kHz, stereo, 128-frame blocks</div></div>
     <div><div class="k">Presets</div><div class="v">all settings; monitor state never saved</div></div>
   </div>
-  <div class="note" style="margin-top:26px"><b>Version 0.1.0.</b> MIDI-note
-  harmony (sing while playing your target chords) is the headline feature on
-  the roadmap — the MIDI path is already wired.</div>
+  <div class="note" style="margin-top:26px"><b>Version 0.2.0</b> added
+  MIDI: played harmony, target-note correction, velocity sensitivity,
+  control notes, and Hard Tune as a real parameter. On the roadmap:
+  chord-follow from what the Move set is already playing, and
+  voice-to-MIDI out.</div>
 </div></section>
 
 </main>

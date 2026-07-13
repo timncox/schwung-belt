@@ -8,7 +8,9 @@
  *   Pads 68-71 (bottom row)  Harmony voices 1-4: tap = toggle on/off,
  *                            Shift+tap = cycle the voice's interval
  *   Pad 76 (above 68)        HARD — hard-tune punch (tap = latch,
- *                            hold = momentary): retune 0 / amount 100
+ *                            hold = momentary): drives the engine's
+ *                            `hard` param (also on Shift+knob 5 and
+ *                            MIDI control note 0)
  *   Pad 73                   Monitor (belt-in only): input on/off +
  *                            mic feedback guard
  *   Steps 1-12               chromatic strip C..B: in-scale notes dim,
@@ -17,7 +19,8 @@
  *   Steps 13-16              harmony voice indicators
  *   Knobs 1-8                Key, Scale, Retune, Amount, Harm Level,
  *                            Doubler, Formant, Wet
- *   Shift + Knobs            Humanize, Flex, Spread, Monitor
+ *   Shift + Knobs            Humanize, Flex, Spread, Monitor, Hard,
+ *                            MIDI mode, Vel Sens
  *
  * Screen reader: pad actions, knob changes and note events are announced
  * via shared/screen_reader.mjs when the reader is enabled.
@@ -107,11 +110,17 @@ const KNOBS2 = [
       speech: 'Harmony spread' },
     { key: 'monitor',  name: 'Mon',  opts: ['Mute', 'On'],
       speech: 'Monitoring', speechOpts: ['muted', 'on'] },
-    null, null, null, null
+    { key: 'hard',     name: 'Hard', opts: ['Off', 'On'],
+      speech: 'Hard tune', speechOpts: ['off', 'on'] },
+    { key: 'midi_mode', name: 'MIDI', opts: ['Off', 'Harm', 'Trgt'],
+      speech: 'MIDI note mode', speechOpts: ['off', 'harmony', 'target'] },
+    { key: 'vel_sens', name: 'Vel',  min: 0, max: 100, step: 5,
+      speech: 'Velocity sensitivity' },
+    null
 ];
 
 let knobValues = [0, 1, 25, 100, 80, 0, 0, 100];
-let knob2Values = [30, 0, 70, 1, 0, 0, 0, 0];
+let knob2Values = [30, 0, 70, 1, 0, 1, 50, 0];
 let harm = [0, 0, 0, 0];
 /* interval each voice returns to when toggled back on */
 let lastItv = [7, 9, 11, 1];
@@ -123,12 +132,13 @@ let tickCount = 0;
 let needsRedraw = true;
 let shiftHeld = false;
 
-/* hard-tune punch */
+/* hard-tune punch — a real engine param since v0.2.0; the pad is a
+ * shortcut (tap = latch, hold = momentary) and MIDI control note 0 is a
+ * hardware-independent momentary. hardOn mirrors the engine's view. */
 const HARD_HOLD_MS = 350;
 let hardOn = false;
 let hardHeldAt = 0;
-let savedRetune = 25;
-let savedAmount = 100;
+let heldNotes = 0;
 
 /* Feedback guard — belt-in only (hw_input=1: the DSP reads the mic/line
  * input directly). Mirrors the smack-in guard: speakers on + no line-in
@@ -172,8 +182,13 @@ function pollStatus() {
     const n = parseInt(parts[0]);
     const c = parseInt(parts[1]);
     const v = parseInt(parts[2]);
-    const changed = (n !== detNote10) || (Math.abs(c - cents) > 4) || (v !== voiced);
+    const held = parts.length > 4 ? parseInt(parts[4]) : 0;
+    const hrd = parts.length > 5 ? parseInt(parts[5]) !== 0 : hardOn;
+    const changed = (n !== detNote10) || (Math.abs(c - cents) > 4) ||
+        (v !== voiced) || (held !== heldNotes) || (hrd !== hardOn);
     detNote10 = n; cents = c; voiced = v;
+    if (hrd !== hardOn) { hardOn = hrd; updateActionLEDs(); }
+    heldNotes = held;
     return changed;
 }
 
@@ -320,6 +335,7 @@ function drawUI() {
         let hs = '';
         for (let i = 0; i < 4; i++)
             if (harm[i] > 0) hs += (hs ? ' ' : '') + ITV_NAMES[harm[i]];
+        if (heldNotes > 0) hs += (hs ? ' ' : '') + `MIDI:${heldNotes}`;
         print(2, 55, hs ? `H: ${hs}` : 'H: off', 1);
     }
 
@@ -362,19 +378,9 @@ function cycleVoice(i) {
 function setHard(on, speak) {
     if (on === hardOn) return;
     hardOn = on;
-    if (on) {
-        savedRetune = Math.round(knobValues[2]);
-        savedAmount = Math.round(knobValues[3]);
-        host_module_set_param('retune', '0');
-        host_module_set_param('amount', '100');
-        knobValues[2] = 0; knobValues[3] = 100;
-        if (speak) announce('Hard tune');
-    } else {
-        host_module_set_param('retune', `${savedRetune}`);
-        host_module_set_param('amount', `${savedAmount}`);
-        knobValues[2] = savedRetune; knobValues[3] = savedAmount;
-        if (speak) announce('Hard tune off');
-    }
+    host_module_set_param('hard', on ? '1' : '0');
+    knob2Values[5] = on ? 1 : 0;
+    if (speak) announce(on ? 'Hard tune' : 'Hard tune off');
     updateActionLEDs();
     needsRedraw = true;
 }

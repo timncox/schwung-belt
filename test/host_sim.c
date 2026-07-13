@@ -138,6 +138,12 @@ static void reset_defaults(void) {
     sp("harm1", "0"); sp("harm2", "0"); sp("harm3", "0"); sp("harm4", "0");
     sp("harm_level", "80"); sp("spread", "70"); sp("double_amt", "0");
     sp("formant", "0"); sp("wet", "100"); sp("monitor", "1");
+    sp("hard", "0"); sp("midi_mode", "1"); sp("vel_sens", "50");
+}
+
+static void note(int status, int n, int vel) {
+    uint8_t m[3] = { (uint8_t)status, (uint8_t)n, (uint8_t)vel };
+    belt_on_midi(B, m, 3, 0);
 }
 
 int main(void) {
@@ -320,11 +326,126 @@ int main(void) {
     run_sine(220.0, 0.35, sec);
     {
         const char *s = gp("status");
-        int note10, cents, voiced, mask;
-        assert(sscanf(s, "%d:%d:%d:%d", &note10, &cents, &voiced, &mask) == 4);
+        int note10, cents, voiced, mask, held, hard;
+        assert(sscanf(s, "%d:%d:%d:%d:%d:%d",
+                      &note10, &cents, &voiced, &mask, &held, &hard) == 6);
         printf("test 14 status            -> %s\n", s);
         assert(voiced == 1);
         assert(abs(note10 - 570) < 10);   /* A3 = midi 57 */
+        assert(held == 0 && hard == 0);
+    }
+
+    /* ---- 15. played harmony: hold E4 while singing A3 ---- */
+    note(0x90, 64, 100);                  /* E4 = 329.63 Hz */
+    run_sine(220.0, 0.35, 2 * sec);
+    {
+        double p_on = tone_power(329.63, 8192);
+        note(0x80, 64, 0);
+        run_sine(220.0, 0.35, sec);
+        double p_off = tone_power(329.63, 8192);
+        printf("test 15 MIDI harmony E4   -> on=%.5f off=%.5f\n", p_on, p_off);
+        assert(p_on > 4.0 * p_off);
+        const char *s = gp("status");
+        int f[6];
+        sscanf(s, "%d:%d:%d:%d:%d:%d", &f[0], &f[1], &f[2], &f[3], &f[4], &f[5]);
+        assert(f[4] == 0);                /* released */
+    }
+
+    /* ---- 16. chord + voice stability: add a note, first keeps sounding.
+     * NOTE: chord tones sit close to the sung pitch on purpose — Belt is
+     * formant-preserving, so a pure-sine test tone shifted far up has
+     * little energy at the new fundamental (a real voice has harmonics
+     * there). C#4 (ratio 1.26) and E4 (ratio 1.5) are inside the grain
+     * envelope. */
+    note(0x90, 61, 100);                  /* C#4 = 277.18 */
+    run_sine(220.0, 0.35, sec);
+    note(0x90, 64, 100);                  /* E4 = 329.63 */
+    run_sine(220.0, 0.35, sec);
+    {
+        double p_cs = tone_power(277.18, 8192);
+        double p_e = tone_power(329.63, 8192);
+        note(0x80, 64, 0);
+        run_sine(220.0, 0.35, sec);
+        double p_cs2 = tone_power(277.18, 8192);
+        double p_e2 = tone_power(329.63, 8192);
+        note(0x80, 61, 0);
+        printf("test 16 chord stability   -> C#=%.3f E=%.3f | after rel: C#=%.3f E=%.3f\n",
+               p_cs, p_e, p_cs2, p_e2);
+        assert(p_cs > 1.0 && p_e > 1.0);          /* both chord tones present */
+        assert(p_cs2 > 1.0);                      /* C# survived E's release */
+        assert(p_e2 < p_e * 0.25);                /* E actually released */
+    }
+
+    /* ---- 17. target mode: held note pins the correction ---- */
+    sp("midi_mode", "2");
+    note(0x90, 62, 100);                  /* D4 = 293.66 */
+    run_sine(220.0, 0.35, 2 * sec);
+    {
+        double f = detect_freq(6144);
+        note(0x80, 62, 0);
+        printf("test 17 MIDI target D4    -> %.2f Hz (want 293.7)\n", f);
+        assert(fabs(f - 293.66) < 293.66 * 0.02);
+    }
+    sp("midi_mode", "1");
+
+    /* ---- 18. hard param overrides slow/partial correction ---- */
+    sp("scale", "0"); sp("retune", "100"); sp("amount", "50");
+    run_sine(225.13, 0.35, 3 * sec);
+    {
+        double f_soft = detect_freq(6144);
+        sp("hard", "1");
+        run_sine(225.13, 0.35, 2 * sec);
+        double f_hard = detect_freq(6144);
+        sp("hard", "0");
+        printf("test 18 hard param        -> soft=%.2f hard=%.2f (want 220)\n",
+               f_soft, f_hard);
+        assert(f_soft > 221.5);                   /* half-depth: not fully pulled */
+        assert(fabs(f_hard - 220.0) < 220.0 * 0.015);
+    }
+
+    /* ---- 19. control note 0 = momentary hard ---- */
+    note(0x90, 0, 100);
+    run_sine(225.13, 0.35, 2 * sec);
+    {
+        double f_held = detect_freq(6144);
+        int f6[6];
+        sscanf(gp("status"), "%d:%d:%d:%d:%d:%d",
+               &f6[0], &f6[1], &f6[2], &f6[3], &f6[4], &f6[5]);
+        assert(f6[5] == 1);                       /* status reports hard */
+        note(0x80, 0, 0);
+        run_sine(225.13, 0.35, 3 * sec);
+        double f_rel = detect_freq(6144);
+        printf("test 19 ctrl-note hard    -> held=%.2f released=%.2f\n", f_held, f_rel);
+        assert(fabs(f_held - 220.0) < 220.0 * 0.015);
+        assert(f_rel > 221.5);                    /* back to half-depth */
+        assert(!strcmp(gp("retune"), "100"));     /* params untouched */
+        assert(!strcmp(gp("amount"), "50"));
+    }
+    reset_defaults();
+
+    /* ---- 20. sustain pedal holds notes across note-off ---- */
+    note(0xB0, 64, 127);                  /* pedal down (CC64) */
+    note(0x90, 64, 100);                  /* E4 */
+    note(0x80, 64, 0);                    /* release key, pedal holds it */
+    run_sine(220.0, 0.35, 2 * sec);
+    {
+        double p_ped = tone_power(329.63, 8192);
+        note(0xB0, 64, 0);                /* pedal up */
+        run_sine(220.0, 0.35, sec);
+        double p_up = tone_power(329.63, 8192);
+        printf("test 20 sustain pedal     -> held=%.5f lifted=%.5f\n", p_ped, p_up);
+        assert(p_ped > 4.0 * p_up);
+    }
+
+    /* ---- 21. midi_mode off ignores notes ---- */
+    sp("midi_mode", "0");
+    note(0x90, 64, 100);
+    run_sine(220.0, 0.35, 2 * sec);
+    {
+        double p = tone_power(329.63, 8192);
+        printf("test 21 midi off          -> E4 power %.5f (baseline ~0.02, voice ~17)\n", p);
+        assert(p < 0.5);
+        note(0x80, 64, 0);
     }
 
     belt_destroy(B);
