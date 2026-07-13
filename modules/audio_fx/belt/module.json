@@ -2,7 +2,7 @@
   "id": "belt",
   "name": "Belt",
   "abbrev": "BELT",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Live vocal processor: autotune pitch correction, diatonic backing-vocal harmonies, doubler, and formant shift",
   "dsp": "belt.so",
   "ui_chain": "ui_chain.js",
@@ -74,6 +74,10 @@
               "step": 5,
               "unit": "%",
               "display_format": "%.0f"
+            },
+            {
+              "level": "perform",
+              "name": "Perform"
             },
             {
               "level": "harmony",
@@ -266,6 +270,48 @@
             "formant",
             "flex",
             "humanize"
+          ]
+        },
+        "perform": {
+          "name": "Perform",
+          "params": [
+            {
+              "key": "hard",
+              "name": "Hard Tune",
+              "type": "enum",
+              "options": [
+                "Off",
+                "On"
+              ],
+              "default": 0
+            },
+            {
+              "key": "midi_mode",
+              "name": "MIDI Notes",
+              "type": "enum",
+              "options": [
+                "Off",
+                "Harmony",
+                "Target"
+              ],
+              "default": 1
+            },
+            {
+              "key": "vel_sens",
+              "name": "Vel Sens",
+              "type": "float",
+              "min": 0,
+              "max": 100,
+              "default": 50,
+              "step": 5,
+              "unit": "%",
+              "display_format": "%.0f"
+            }
+          ],
+          "knobs": [
+            "hard",
+            "midi_mode",
+            "vel_sens"
           ]
         }
       }

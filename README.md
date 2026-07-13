@@ -9,11 +9,16 @@ harmonies, a stereo doubler, and a formant knob — on the Move's own mic,
 line-in, or USB-C input. Named Belt because it makes you sound like you can.
 
 - **Retune** 0 = instant hard-tune robot, higher = transparent correction
+- **Played harmony (MIDI)** — hold a chord (pads, sequenced clip, external
+  keyboard) and the harmony voices sing those exact notes; sequenced chords
+  keep driving Belt even while an overtake like Mark owns the surface
+- **Target mode** — a held MIDI note pins the correction target: play the
+  melody, sing approximately, land exactly
 - **Harmony voices 1-4** — scale-aware intervals (3rds, 5ths, octaves…),
   humanized with per-voice detune and stereo spread
 - **Doubler** — instant thickness, hard-panned corrected doubles
 - **Formant** — deeper or brighter without changing pitch
-- **HARD pad** — momentary or latched T-Pain punch
+- **HARD** — latch/momentary T-Pain punch: a real param (Perform page), the editor pad, or MIDI control note 0
 - **Tuner strip** — steps 1-12 show your note (green = in tune); press to set the key
 - **Flex / Humanize** — leave expressive slides alone, keep your vibrato
 

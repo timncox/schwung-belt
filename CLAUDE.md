@@ -75,23 +75,49 @@ One analysis, many voices — the reason 7 voices are cheap:
 key 0-11, scale 0-8 (Chromatic/Major/Minor/HarmMin/Dorian/Mixo/MajPent/
 MinPent/Blues), retune 0-100 (0 = instant), amount, flex, humanize,
 harm1-4 (interval enum: Off/-Oct/-6th/-5th/-4th/-3rd/Unis/+3rd/+4th/+5th/
-+6th/+Oct), harm_level, spread, double_amt, formant -100..100, wet.
++6th/+Oct), harm_level, spread, double_amt, formant -100..100, wet,
+`hard` 0/1 (instant full correction WITHOUT touching retune/amount — an
+override flag, nothing saved/restored), `midi_mode` 0 Off / 1 Harmony /
+2 Target, `vel_sens` 0-100.
 `monitor` (0 mutes output; feedback guard; never preset-saved),
-`hw_input` (set by gen wrapper), `status` = "note10:cents:voiced:mask"
-(ONE UI poll per tick), `state` = JSON preset blob (bounded appends —
-the smack snprintf OOB lesson is baked in + regression-tested).
+`hw_input` (set by gen wrapper),
+`status` = "note10:cents:voiced:mask:held:hard" (ONE UI poll per tick;
+mask includes MIDI-pinned voices), `state` = JSON preset blob (bounded
+appends — the smack snprintf OOB lesson is baked in + regression-tested).
+
+## MIDI (v0.2.0)
+
+Both wrappers already forwarded MIDI; the core now uses it. Held-note
+table (10 slots, order-stamped, CC64 sustain). **Harmony mode** (default):
+voices are PINNED to held notes — stable assignment (a voice keeps its
+note while held; newest press steals the voice holding the OLDEST note
+when >4 held); velocity scales voice gain by vel_sens; released voices
+fall back to their interval params. Pinned voices carry NO vibrato
+residue (chord tones stay put). **Target mode**: most-recent held note
+replaces the scale quantizer for the lead (flex bypassed — the note was
+asked for). **Control notes 0-2** (any mode except Off): 0 = momentary
+hard, 1 = momentary full doubler, 2 = momentary harmony mute. Notes
+arrive from Move pads, sequenced clips (these keep playing under an
+overtake — the Mark pairing story), and external MIDI. Sine-based tests
+must keep chord tones NEAR the sung pitch: formant preservation means a
+pure sine shifted far up has little energy at the new fundamental
+(test 16's comment).
 
 ## Chain UI (src/ui_chain.js, shipped in both tarballs)
 
 Pads 68-71 = harmony voices (tap toggle, Shift+tap cycles interval),
-76 = HARD punch (tap latch / hold momentary: retune 0 + amount 100),
+76 = HARD punch (tap latch / hold momentary — sets the `hard` param),
 73 = Monitor (belt-in only, mirrors the smack-in feedback guard).
 Steps 1-12 = chromatic tuner strip (in-scale dim, detected note green when
 within 25 cents, orange otherwise; press = set Key), steps 13-16 = voice
 indicators. Knobs: Key, Scale, Retune, Amount, Harm, Dbl, Formant, Wet;
-Shift page: Humanize, Flex, Spread, Monitor. QuickJS modules are strict
-mode — audit for assigned-but-undeclared identifiers before shipping
-(the smack punchPad lesson).
+Shift page: Humanize, Flex, Spread, Monitor, Hard, MIDI mode, Vel Sens.
+NOTE (2026-07-13, unresolved): whether pad events actually reach chain
+UIs on hardware is disputed — the shim source shows delivery + pass-
+through to Move (no pad_block outside overtake), but the smack sessions
+suggest otherwise; every pad function therefore ALSO exists as a param.
+QuickJS modules are strict mode — audit for assigned-but-undeclared
+identifiers before shipping (the smack punchPad lesson).
 
 ## Not yet verified on hardware
 
@@ -131,9 +157,8 @@ Catalog PR to charlesvestal/schwung: only after hardware test (house rule).
 
 ## v1 limitations (deliberate, revisit)
 
-- No MIDI-note harmony mode (sing + play target notes) — the wrapper
-  already forwards MIDI; core ignores it. Top v2 candidate.
-- No chord-follow from Move's clips (TC NaturalPlay style).
+- No chord-follow inferred from what the set is playing (explicit notes
+  only — TC NaturalPlay-style chord detection is a v3 candidate).
 - Formant shift is grain-resampling (envelope+content together per grain),
   not LPC envelope warping — the classic pedal sound, not studio-grade.
 - Harmony voices duck on unvoiced input rather than passing shifted
