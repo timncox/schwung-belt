@@ -151,6 +151,11 @@ int main(void) {
     B = belt_create(&host);
     assert(B);
     reset_defaults();
+    sp("rui_set", "amount:37");
+    assert(!strcmp(gp("amount"), "37"));
+    sp("rui_set", "rui_set:amount:0");
+    assert(!strcmp(gp("amount"), "37"));
+    sp("rui_set", "amount:100");
 
     int sec = 44100 / BLK;   /* blocks per second */
 

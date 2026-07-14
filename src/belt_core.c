@@ -678,6 +678,17 @@ static int json_int(const char *src, const char *key, int *out) {
 
 void belt_set_param(belt_t *b, const char *key, const char *val) {
     if (!b || !key || !val) return;
+    if (!strcmp(key, "rui_set")) {
+        const char *separator = strchr(val, ':');
+        size_t key_len = separator ? (size_t)(separator - val) : 0;
+        char routed_key[32];
+        if (!separator || key_len == 0 || key_len >= sizeof(routed_key)) return;
+        memcpy(routed_key, val, key_len);
+        routed_key[key_len] = '\0';
+        if (!strcmp(routed_key, "rui_set")) return;
+        belt_set_param(b, routed_key, separator + 1);
+        return;
+    }
     param_map_t t[24];
     int n = param_table(b, t);
     for (int i = 0; i < n; i++) {
