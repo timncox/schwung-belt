@@ -127,8 +127,6 @@ let shiftHeld = false;
 const HARD_HOLD_MS = 350;
 let hardOn = false;
 let hardHeldAt = 0;
-let savedRetune = 25;
-let savedAmount = 100;
 
 /* Feedback guard — belt-in only (hw_input=1: the DSP reads the mic/line
  * input directly). Mirrors the smack-in guard: speakers on + no line-in
@@ -162,6 +160,7 @@ function fetchAll() {
     }
     hwInput = gp('hw_input') === '1';
     monitorOn = (gp('monitor') || '1') !== '0';
+    hardOn = gp('hard') === '1';
 }
 
 function pollStatus() {
@@ -362,19 +361,8 @@ function cycleVoice(i) {
 function setHard(on, speak) {
     if (on === hardOn) return;
     hardOn = on;
-    if (on) {
-        savedRetune = Math.round(knobValues[2]);
-        savedAmount = Math.round(knobValues[3]);
-        host_module_set_param('retune', '0');
-        host_module_set_param('amount', '100');
-        knobValues[2] = 0; knobValues[3] = 100;
-        if (speak) announce('Hard tune');
-    } else {
-        host_module_set_param('retune', `${savedRetune}`);
-        host_module_set_param('amount', `${savedAmount}`);
-        knobValues[2] = savedRetune; knobValues[3] = savedAmount;
-        if (speak) announce('Hard tune off');
-    }
+    host_module_set_param('hard', on ? '1' : '0');
+    if (speak) announce(on ? 'Hard tune' : 'Hard tune off');
     updateActionLEDs();
     needsRedraw = true;
 }
@@ -408,6 +396,7 @@ function tick() {
         const oldKnobs = knobValues.join(',');
         const oldHarm = harm.join(',');
         const oldMon = monitorOn;
+        const oldHard = hardOn;
         fetchAll();
         if (knobValues.join(',') !== oldKnobs) {
             updateStepLEDs();
@@ -419,6 +408,7 @@ function tick() {
             needsRedraw = true;
         }
         if (monitorOn !== oldMon) { updateActionLEDs(); needsRedraw = true; }
+        if (hardOn !== oldHard) { updateActionLEDs(); needsRedraw = true; }
     }
 
     if (needsRedraw) drawUI();

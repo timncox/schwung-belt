@@ -99,6 +99,7 @@ struct belt {
     int double_amt;       /* 0-100 doubler */
     int formant;          /* -100..100 -> +/- half octave */
     int wet;              /* 0-100 corrected vs dry lead */
+    int hard;             /* performance override: instant, full correction */
     int monitor;          /* 0 = output muted (feedback guard, never saved) */
     int hw_input;         /* set by the gen wrapper: mic guard applies */
 
@@ -398,7 +399,7 @@ static void belt_update_targets(belt_t *b, int frames) {
     float va = vt > b->voiced_sm ? 0.5f : dt / (dt + 0.060f);
     b->voiced_sm += (vt - b->voiced_sm) * va;
 
-    float amount01 = (float)b->amount / 100.0f;
+    float amount01 = (float)(b->hard ? 100 : b->amount) / 100.0f;
     float flex01 = (float)b->flex / 100.0f;
     float hum01 = (float)b->humanize / 100.0f;
 
@@ -418,7 +419,7 @@ static void belt_update_targets(belt_t *b, int frames) {
     /* retune-speed smoothing of the correction offset; freeze during
      * unvoiced so each phrase doesn't re-glide from stale values */
     if (b->voiced) {
-        float tau = ((float)b->retune / 100.0f);
+        float tau = ((float)(b->hard ? 0 : b->retune) / 100.0f);
         tau = tau * tau * 0.5f;                       /* 0..500 ms */
         float alpha = tau < 1e-4f ? 1.0f : dt / (dt + tau);
         b->lead_off += (off_target - b->lead_off) * alpha;
@@ -520,7 +521,7 @@ static void fire_grain(belt_t *b, const belt_voice_t *v, double t_o, float g) {
     if (len < 8) len = 8;
     float inv = 1.0f / (float)len;
     /* equal-power pan */
-    float th = (v->pan + 1.0f) * 0.785398163f * 0.5f;
+    float th = (v->pan + 1.0f) * 0.785398163f;
     float gl = cosf(th) * v->gain, gr = sinf(th) * v->gain;
 
     uint64_t t0 = (uint64_t)t_o;
@@ -533,6 +534,18 @@ static void fire_grain(belt_t *b, const belt_voice_t *v, double t_o, float g) {
         b->acc[oi * 2]     += s * gl;
         b->acc[oi * 2 + 1] += s * gr;
     }
+}
+
+/* Leave normal levels untouched, then bend the final 10% smoothly toward
+ * full scale. Additive harmony stacks can otherwise sit on the hard int16
+ * clamp for long stretches, which sounds much harsher than a vocal-bus
+ * limiter and makes the exact result depend on voice correlation. */
+static float output_limit(float x) {
+    float a = fabsf(x);
+    if (a <= 0.9f) return x;
+    float y = 0.9f + 0.1f * tanhf((a - 0.9f) * 10.0f);
+    if (y > 0.999f) y = 0.999f;
+    return x < 0.0f ? -y : y;
 }
 
 void belt_process(belt_t *b, const int16_t *in, int16_t *out, int frames) {
@@ -599,6 +612,9 @@ void belt_process(belt_t *b, const int16_t *in, int16_t *out, int frames) {
     float dry01 = 1.0f - (float)b->wet / 100.0f;
     uint64_t rd = b->w - (uint64_t)frames;
     int mute = !b->monitor;
+    int limit_on = b->wet > 0 || b->double_amt > 0;
+    for (int i = 0; i < BELT_HARMONIES; i++)
+        if (b->harm[i] != ITV_OFF) limit_on = 1;
     for (int i = 0; i < frames; i++) {
         uint64_t t = rd + (uint64_t)i;
         uint64_t ai = t & ACC_MASK;
@@ -610,8 +626,13 @@ void belt_process(belt_t *b, const int16_t *in, int16_t *out, int frames) {
         l += dry01 * (float)b->dry_ring[di * 2] / 32768.0f;
         r += dry01 * (float)b->dry_ring[di * 2 + 1] / 32768.0f;
 
-        int32_t li = (int32_t)(clampf(l, -1.0f, 1.0f) * 32767.0f);
-        int32_t ri = (int32_t)(clampf(r, -1.0f, 1.0f) * 32767.0f);
+        if (limit_on) {
+            l = output_limit(l);
+            r = output_limit(r);
+        }
+
+        int32_t li = (int32_t)(l * 32767.0f);
+        int32_t ri = (int32_t)(r * 32767.0f);
         out[i * 2]     = mute ? 0 : (int16_t)li;
         out[i * 2 + 1] = mute ? 0 : (int16_t)ri;
     }
@@ -639,6 +660,7 @@ static int param_table(belt_t *b, param_map_t *t) {
     t[n++] = (param_map_t){ "double_amt", &b->double_amt, 0, 100 };
     t[n++] = (param_map_t){ "formant",    &b->formant,    -100, 100 };
     t[n++] = (param_map_t){ "wet",        &b->wet,        0, 100 };
+    t[n++] = (param_map_t){ "hard",       &b->hard,       0, 1 };
     return n;
 }
 

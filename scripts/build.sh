@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-
 EOF
 fi
 
+rm -rf build/modules/audio_fx/belt build/modules/sound_generators/belt-in
 mkdir -p build/modules/audio_fx/belt build/modules/sound_generators/belt-in
 
 cp modules/audio_fx/belt/module.json src/ui_chain.js build/modules/audio_fx/belt/
@@ -44,5 +45,22 @@ docker run --rm -v "$PWD":/w -w /w "$IMAGE" bash -c "
     tar -tzf build/belt-module.tar.gz
     tar -tzf build/belt-in-module.tar.gz
 "
+
+validate_archive() {
+    local archive="$1"
+    shift
+    for member in "$@"; do
+        tar -tzf "$archive" "$member" >/dev/null
+    done
+    if tar -tzf "$archive" | grep -Eq '(^|/)(\._|\.DS_Store)'; then
+        echo "Unexpected macOS metadata in $archive" >&2
+        return 1
+    fi
+}
+
+validate_archive build/belt-module.tar.gz \
+    belt/module.json belt/belt.so belt/ui_chain.js belt/help.json
+validate_archive build/belt-in-module.tar.gz \
+    belt-in/module.json belt-in/dsp.so belt-in/ui_chain.js belt-in/help.json
 
 echo "Built: build/belt-module.tar.gz, build/belt-in-module.tar.gz"

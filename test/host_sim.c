@@ -137,7 +137,7 @@ static void reset_defaults(void) {
     sp("humanize", "0");
     sp("harm1", "0"); sp("harm2", "0"); sp("harm3", "0"); sp("harm4", "0");
     sp("harm_level", "80"); sp("spread", "70"); sp("double_amt", "0");
-    sp("formant", "0"); sp("wet", "100"); sp("monitor", "1");
+    sp("formant", "0"); sp("wet", "100"); sp("hard", "0"); sp("monitor", "1");
 }
 
 int main(void) {
@@ -167,9 +167,18 @@ int main(void) {
     {
         double f = detect_freq(6144);
         double rms = out_rms(6144);
+        float l[4096], r[4096];
+        snap(l, r, 4096);
+        double le = 0.0, re = 0.0;
+        for (int i = 0; i < 4096; i++) {
+            le += (double)l[i] * l[i];
+            re += (double)r[i] * r[i];
+        }
+        double balance = sqrt(le / (re + 1e-12));
         printf("test 2  wet pass 220      -> %.2f Hz rms=%.3f\n", f, rms);
         assert(fabs(f - 220.0) < 220.0 * 0.02);
         assert(rms > 0.05 && rms < 0.6);   /* COLA sanity: no collapse/blowup */
+        assert(balance > 0.95 && balance < 1.05); /* center pan is centered */
     }
 
     /* ---- 3. correction pulls +40 cents back to A (chromatic) ---- */
@@ -190,6 +199,19 @@ int main(void) {
         assert(fabs(f - 225.13) < 225.13 * 0.015);
     }
     sp("amount", "100");
+
+    /* ---- 4b. HARD overrides without destroying the underlying knobs ---- */
+    sp("retune", "80"); sp("amount", "0"); sp("hard", "1");
+    run_sine(225.13, 0.35, 2 * sec);
+    {
+        double f = detect_freq(6144);
+        printf("test 4b hard override     -> %.2f Hz (want 220)\n", f);
+        assert(fabs(f - 220.0) < 220.0 * 0.015);
+        assert(!strcmp(gp("retune"), "80"));
+        assert(!strcmp(gp("amount"), "0"));
+        assert(!strcmp(gp("hard"), "1"));
+    }
+    sp("hard", "0"); sp("retune", "0"); sp("amount", "100");
 
     /* ---- 5. diatonic harmony: +3rd on A in A major = C#5 (277.2) ---- */
     sp("key", "9"); sp("scale", "1");      /* A major */
@@ -286,7 +308,7 @@ int main(void) {
 
     /* ---- 12. state blob round-trip ---- */
     sp("key", "4"); sp("scale", "3"); sp("retune", "60"); sp("harm1", "9");
-    sp("double_amt", "35"); sp("formant", "-40");
+    sp("double_amt", "35"); sp("formant", "-40"); sp("hard", "1");
     {
         char blob[512];
         int n = belt_get_param(B, "state", blob, sizeof(blob));
@@ -302,6 +324,7 @@ int main(void) {
         belt_get_param(B2, "harm1", v, sizeof(v));    assert(!strcmp(v, "9"));
         belt_get_param(B2, "double_amt", v, sizeof(v)); assert(!strcmp(v, "35"));
         belt_get_param(B2, "formant", v, sizeof(v));  assert(!strcmp(v, "-40"));
+        belt_get_param(B2, "hard", v, sizeof(v));     assert(!strcmp(v, "1"));
         belt_destroy(B2);
         printf("test 12 state round-trip  -> %d bytes ok\n", n);
     }
@@ -325,6 +348,22 @@ int main(void) {
         printf("test 14 status            -> %s\n", s);
         assert(voiced == 1);
         assert(abs(note10 - 570) < 10);   /* A3 = midi 57 */
+    }
+
+    /* ---- 15. dense stacks use the soft ceiling, never the hard clamp ---- */
+    sp("harm1", "1"); sp("harm2", "7"); sp("harm3", "9"); sp("harm4", "11");
+    sp("harm_level", "100"); sp("double_amt", "100");
+    run_sine(220.0, 0.95, 2 * sec);
+    {
+        int peak = 0;
+        for (int i = 0; i < 8192; i++) {
+            int idx = (cap_n - 8192 + i) & (CAP - 1);
+            int al = abs((int)cap_l[idx]), ar = abs((int)cap_r[idx]);
+            if (al > peak) peak = al;
+            if (ar > peak) peak = ar;
+        }
+        printf("test 15 vocal-bus ceiling -> peak=%d\n", peak);
+        assert(peak <= 32735);
     }
 
     belt_destroy(B);
