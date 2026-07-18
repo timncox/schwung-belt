@@ -1,6 +1,6 @@
 ---
 status: active
-last_touched: 2026-07-13
+last_touched: 2026-07-18
 ---
 
 # Belt
@@ -116,17 +116,17 @@ clean (contrast fixes: small accent text uses --rust not --acc; pad labels
 cream-on-darkened voice colors); skip link, landmarks, aria-live readout,
 visible focus, reduced-motion support. Re-run an axe pass after edits.
 
-## Release process (two repos, one source)
+## Release process (dedicated distributions, one source)
 
-Source + `belt` distribution: this repo (timncox/schwung-belt).
-`belt-in` distribution: timncox/schwung-belt-in — a THIN repo holding only
-README + release.json + release tarballs (the installer resolves one
-release.json per repo, so each catalog id needs its own repo).
+Source: this repo (timncox/schwung-belt). Dedicated THIN distribution repos:
+`belt` = timncox/schwung-belt-fx and `belt-in` =
+timncox/schwung-belt-voice. Each holds README + release.json + release
+tarballs (the installer resolves one release.json per repo, so each catalog
+ID needs its own repo).
 
 To ship version X: bump both module.json versions + root release.json here,
-`make arm`, commit/push, `gh release create vX` here with BOTH tarballs,
-then on schwung-belt-in: update its release.json via API and
-`gh release create vX` with belt-in-module.tar.gz.
+`make arm`, commit/push, then publish `belt-module.tar.gz` to schwung-belt-fx
+and `belt-in-module.tar.gz` to schwung-belt-voice under the same version tag.
 Catalog PR to charlesvestal/schwung: only after hardware test (house rule).
 
 ## v1 limitations (deliberate, revisit)

@@ -28,12 +28,13 @@ Both ship the same chain UI and engine.
 
 ## Install
 
-Via schwung-manager → Install Custom Module → GitHub repo:
+In Schwung Manager, search the Module Store for Belt or Belt In. For a custom
+install, use the dedicated distribution repo:
 
-- `belt`: `timncox/schwung-belt`
-- `belt-in`: `timncox/schwung-belt-in`
+- `belt` Audio FX: `timncox/schwung-belt-fx`
+- `belt-in` Voice: `timncox/schwung-belt-voice`
 
-Or upload the tarballs from the [releases](../../releases).
+All source and issue tracking remain in this repository.
 
 **Feedback warning:** singing into the Move's mic while its speaker is on
 will howl. Belt In auto-mutes in that state (Monitor pad overrides) —
