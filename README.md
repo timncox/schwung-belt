@@ -24,15 +24,21 @@ line-in, or USB-C input. Named Belt because it makes you sound like you can.
 | `belt` | `audio_fx` | Signal Chain slots + Master FX (processes whatever is upstream) |
 | `belt-in` | `sound_generator` (audio_in) | standalone slot synth on the hardware input — the live-vocals build |
 
-Both ship the same chain UI and engine.
+Both ship the same chain UI and engine. They are built from this canonical
+repository and published together under one release tag.
 
 ## Install
 
-In Schwung Manager, search the Module Store for Belt or Belt In. For a custom
-install, use the dedicated distribution repo:
+In Schwung Manager, search the Module Store for Belt or Belt In. The store
+resolves both entries from this repository's multi-module release manifest.
+Schwung's Custom GitHub installer does not yet offer a module picker, so use
+the dedicated compatibility repository for the form you want:
 
 - `belt` Audio FX: `timncox/schwung-belt-fx`
 - `belt-in` Voice: `timncox/schwung-belt-voice`
+
+Those compatibility repositories mirror the archives built here; they do not
+carry separate Belt source.
 
 All source and issue tracking remain in this repository.
 

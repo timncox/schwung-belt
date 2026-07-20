@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Verify release metadata
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${RELEASE_VERSION#v}"
+          test "$(jq -r '.version' release.json)" = "$VERSION"
+          test "$(jq -r '.download_url' release.json)" = "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_VERSION}/belt-module.tar.gz"
+          for ID in belt belt-in; do
+            test "$(jq -r --arg id "$ID" '.modules[$id].version' release.json)" = "$VERSION"
+            test "$(jq -r --arg id "$ID" '.modules[$id].download_url' release.json)" = "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_VERSION}/${ID}-module.tar.gz"
+          done
+          test "$(jq -r '.version' modules/audio_fx/belt/module.json)" = "$VERSION"
+          test "$(jq -r '.version' modules/sound_generators/belt-in/module.json)" = "$VERSION"
+
+      - name: Build ARM modules
+        run: make arm
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            build/belt-module.tar.gz
+            build/belt-in-module.tar.gz
