@@ -1,20 +1,20 @@
 {
-  "version": "0.1.2",
-  "download_url": "https://github.com/timncox/schwung-belt/releases/download/v0.1.2/belt-module.tar.gz",
+  "version": "0.2.0",
+  "download_url": "https://github.com/timncox/schwung-belt/releases/download/v0.2.0/belt-module.tar.gz",
   "name": "Belt",
   "description": "Live vocal Audio FX with autotune, four scale-aware harmonies, HARD punch, doubler, tuner strip, and formant shift",
   "repo_url": "https://github.com/timncox/schwung-belt",
   "modules": {
     "belt": {
-      "version": "0.1.2",
-      "download_url": "https://github.com/timncox/schwung-belt/releases/download/v0.1.2/belt-module.tar.gz",
+      "version": "0.2.0",
+      "download_url": "https://github.com/timncox/schwung-belt/releases/download/v0.2.0/belt-module.tar.gz",
       "name": "Belt",
       "description": "Live vocal Audio FX with autotune, four scale-aware harmonies, HARD punch, doubler, tuner strip, and formant shift",
       "repo_url": "https://github.com/timncox/schwung-belt"
     },
     "belt-in": {
-      "version": "0.1.2",
-      "download_url": "https://github.com/timncox/schwung-belt/releases/download/v0.1.2/belt-in-module.tar.gz",
+      "version": "0.2.0",
+      "download_url": "https://github.com/timncox/schwung-belt/releases/download/v0.2.0/belt-in-module.tar.gz",
       "name": "Belt In",
       "description": "Standalone mic, line, or USB-C vocal Voice with autotune, four scale-aware harmonies, HARD punch, doubler, and formant shift",
       "repo_url": "https://github.com/timncox/schwung-belt"
