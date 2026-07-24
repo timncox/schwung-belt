@@ -371,6 +371,46 @@ int main(void) {
         assert(peak <= 32735);
     }
 
+    /* ---- 16. MIDI CC control: scaling, source filter, duplicate guard ---- */
+    {
+        uint8_t cc[3] = { 0xB0, 22, 127 };               /* CC 22 = retune */
+        belt_on_midi(B, cc, 3, MOVE_MIDI_SOURCE_EXTERNAL);
+        assert(!strcmp(gp("retune"), "100"));
+
+        cc[2] = 0;                                        /* new value: passes */
+        belt_on_midi(B, cc, 3, MOVE_MIDI_SOURCE_EXTERNAL);
+        assert(!strcmp(gp("retune"), "0"));
+
+        cc[1] = 33; cc[2] = 64;                           /* formant center */
+        belt_on_midi(B, cc, 3, MOVE_MIDI_SOURCE_FX_BROADCAST);
+        assert(abs(atoi(gp("formant"))) <= 2);
+
+        cc[1] = 22; cc[2] = 9;                            /* retune -> 7 */
+        belt_on_midi(B, cc, 3, MOVE_MIDI_SOURCE_EXTERNAL);
+        assert(!strcmp(gp("retune"), "7"));
+        sp("retune", "50");
+        belt_on_midi(B, cc, 3, MOVE_MIDI_SOURCE_FX_BROADCAST);
+        assert(!strcmp(gp("retune"), "50"));              /* dup dropped */
+
+        run_sine(220.0, 0.1, 3);                          /* guard expires */
+        belt_on_midi(B, cc, 3, MOVE_MIDI_SOURCE_EXTERNAL);
+        assert(!strcmp(gp("retune"), "7"));
+
+        sp("wet", "80");
+        cc[1] = 34; cc[2] = 127;                          /* internal source is
+                                                             never CC control */
+        belt_on_midi(B, cc, 3, MOVE_MIDI_SOURCE_INTERNAL);
+        assert(!strcmp(gp("wet"), "80"));
+
+        cc[1] = 35; cc[2] = 127;                          /* hard toggle on */
+        belt_on_midi(B, cc, 3, MOVE_MIDI_SOURCE_EXTERNAL);
+        assert(!strcmp(gp("hard"), "1"));
+        cc[2] = 63;                                       /* below threshold */
+        belt_on_midi(B, cc, 3, MOVE_MIDI_SOURCE_EXTERNAL);
+        assert(!strcmp(gp("hard"), "0"));
+        printf("test 16 midi cc control   -> ok\n");
+    }
+
     belt_destroy(B);
     printf("\nall belt sim tests passed\n");
     return 0;

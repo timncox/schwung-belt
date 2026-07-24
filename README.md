@@ -46,6 +46,34 @@ All source and issue tracking remain in this repository.
 will howl. Belt In auto-mutes in that state (Monitor pad overrides) —
 use headphones or line out.
 
+## MIDI CC control
+
+Every Belt parameter responds to MIDI CC from a controller plugged into the
+Move's USB-A port (Launch Control, Faderfox, keyboard knobs — anything that
+sends CC). The 0–127 CC value scales linearly across each parameter's range.
+
+| CC | param | range | CC | param | range |
+|----|-------|-------|----|-------|-------|
+| 20 | key | C..B | 28 | harm 3 | off..interval |
+| 21 | scale | 9 scales | 29 | harm 4 | off..interval |
+| 22 | retune | 0–100 | 30 | harm level | 0–100 |
+| 23 | amount | 0–100 | 31 | spread | 0–100 |
+| 24 | flex | 0–100 | 32 | double | 0–100 |
+| 25 | humanize | 0–100 | 33 | formant | -100–100 |
+| 26 | harm 1 | off..interval | 34 | wet | 0–100 |
+| 27 | harm 2 | off..interval | 35 | hard | ≥64 = on |
+
+Channel notes:
+
+- **`belt` in a chain or Master FX slot:** any MIDI channel works — the host
+  broadcasts external CCs to audio FX regardless of the slot's receive
+  channel.
+- **`belt-in` (sound generator):** CCs follow note routing, so set your
+  controller to the same MIDI channel the slot receives on (don't rely on
+  auto channel mapping — it remaps notes, not CCs).
+
+Move's own encoders are internal MIDI and never collide with this map.
+
 ## Build from source
 
 ```
