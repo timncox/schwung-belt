@@ -23,8 +23,8 @@ Schwung = charlesvestal/schwung, the Shadow-UI sidecar framework for the Move
 - `src/belt_fx.c` → **belt** (`audio_fx`): works in chain slots AND Master
   FX slots. The .so MUST be named `belt.so` (the chain host loads
   `modules/audio_fx/<id>/<id>.so` without reading module.json). Exports
-  `move_audio_fx_on_midi` via dlsym for future MIDI features (ducker
-  pattern; struct on_midi field stays NULL for old-host ABI).
+  `move_audio_fx_on_midi` via dlsym (ducker pattern; struct on_midi field
+  stays NULL for old-host ABI) — carries external CC control (see below).
 - `src/belt_gen.c` → **belt-in** (`sound_generator`, `audio_in: true`):
   standalone live mic/line/USB-C vocal processor reading the host mailbox
   input. Sets `hw_input=1` so the shared chain UI arms the feedback guard.
@@ -132,7 +132,25 @@ Catalog PR to charlesvestal/schwung: only after hardware test (house rule).
 ## v1 limitations (deliberate, revisit)
 
 - No MIDI-note harmony mode (sing + play target notes) — the wrapper
-  already forwards MIDI; core ignores it. Top v2 candidate.
+  already forwards MIDI; core only maps CCs. Top v2 candidate.
+
+## MIDI CC control
+
+`belt_on_midi` maps external CC 20–35 onto the 16 `param_table` entries in
+order, 0–127 scaled linearly into each range (see README for the table).
+Rules, grounded in schwung's routing (verified in schwung src 2026-07-24):
+
+- Accept ONLY `MOVE_MIDI_SOURCE_EXTERNAL` and `MOVE_MIDI_SOURCE_FX_BROADCAST`
+  — internal MIDI carries Move's own encoder CCs (71–79), Shift (49),
+  jog (3); handling those would fight the firmware.
+- A channel-matched chain slot delivers one external CC twice (channel
+  dispatch with source EXTERNAL + FX broadcast); an identical message within
+  256 samples of the last accepted one is dropped (`cc_last`/`cc_last_w`).
+  Master FX slots deliver exactly once (EXTERNAL).
+- audio_fx builds hear CCs on ANY channel (FX broadcast is channel-blind);
+  the sound_generator build only hears the slot's receive channel — and
+  Move's auto channel remap applies to notes, NOT CCs, so users must set
+  the controller channel explicitly (schwung shadow_midi.c documents this).
 - No chord-follow from Move's clips (TC NaturalPlay style).
 - Formant shift is grain-resampling (envelope+content together per grain),
   not LPC envelope warping — the classic pedal sound, not studio-grade.

@@ -103,6 +103,10 @@ struct belt {
     int monitor;          /* 0 = output muted (feedback guard, never saved) */
     int hw_input;         /* set by the gen wrapper: mic guard applies */
 
+    /* ---- MIDI CC control ---- */
+    uint8_t  cc_last[3];  /* last external CC accepted (duplicate guard) */
+    uint64_t cc_last_w;   /* input write head when it was accepted */
+
     /* ---- input / analysis state ---- */
     uint64_t w;           /* absolute input write head */
     float   *in_ring;     /* mono float */
@@ -282,11 +286,7 @@ void belt_destroy(belt_t *b) {
     free(b);
 }
 
-void belt_on_midi(belt_t *b, const uint8_t *msg, int len, int source) {
-    /* v1 ignores MIDI (no clock dependence). Kept for ABI + future
-     * MIDI-controlled harmony. */
-    (void)b; (void)msg; (void)len; (void)source;
-}
+/* belt_on_midi lives after param_table (it maps CCs through the table). */
 
 /* ------------------------------------------------------------------ */
 /* analysis                                                           */
@@ -662,6 +662,41 @@ static int param_table(belt_t *b, param_map_t *t) {
     t[n++] = (param_map_t){ "wet",        &b->wet,        0, 100 };
     t[n++] = (param_map_t){ "hard",       &b->hard,       0, 1 };
     return n;
+}
+
+/* MIDI CC control: an external controller (USB-A) drives the full param
+ * table. CC 20..35 map to param_table entries 0..15 in order:
+ *   20 key   21 scale  22 retune  23 amount  24 flex    25 humanize
+ *   26 harm1 27 harm2  28 harm3   29 harm4   30 harm_level  31 spread
+ *   32 double_amt  33 formant  34 wet  35 hard
+ * The 0-127 CC value scales linearly into each param's range.
+ *
+ * Sources: in a chain slot the host delivers one external CC twice when the
+ * slot's receive channel matches (channel dispatch + FX broadcast), so both
+ * EXTERNAL and FX_BROADCAST are accepted and an identical message within
+ * ~2 blocks is dropped. Internal MIDI (Move's own encoders, Shift, jog)
+ * never reaches this path.
+ */
+#define BELT_CC_BASE 20
+
+void belt_on_midi(belt_t *b, const uint8_t *msg, int len, int source) {
+    if (!b || !msg || len < 3) return;
+    if ((msg[0] & 0xF0) != 0xB0) return;
+    if (source != MOVE_MIDI_SOURCE_EXTERNAL &&
+        source != MOVE_MIDI_SOURCE_FX_BROADCAST) return;
+
+    if (msg[0] == b->cc_last[0] && msg[1] == b->cc_last[1] &&
+        msg[2] == b->cc_last[2] && b->w - b->cc_last_w <= 256)
+        return;
+    b->cc_last[0] = msg[0]; b->cc_last[1] = msg[1]; b->cc_last[2] = msg[2];
+    b->cc_last_w = b->w;
+
+    param_map_t t[24];
+    int n = param_table(b, t);
+    int idx = (int)msg[1] - BELT_CC_BASE;
+    if (idx < 0 || idx >= n) return;
+    int lo = t[idx].lo, hi = t[idx].hi;
+    *t[idx].field = lo + ((int)msg[2] * (hi - lo) + 63) / 127;
 }
 
 /* minimal JSON number scan for the state blob: finds "key": <num> */

@@ -2,7 +2,7 @@
   "id": "belt-in",
   "name": "Belt In",
   "abbrev": "BLTI",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Standalone live-input (mic/line/USB-C) build of Belt: autotune, diatonic harmonies, doubler, formant shift",
   "dsp": "dsp.so",
   "ui_chain": "ui_chain.js",
