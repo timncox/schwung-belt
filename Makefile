@@ -1,9 +1,9 @@
 CC ?= cc
 CFLAGS = -O2 -g -Wall -Wextra -Iinclude
 
-.PHONY: test arm clean
+.PHONY: test test-ui arm clean
 
-test: build/host_sim
+test: build/host_sim test-ui
 	./build/host_sim
 
 build/host_sim: src/belt_core.c src/belt_core.h test/host_sim.c
@@ -15,3 +15,6 @@ arm:
 
 clean:
 	rm -rf build
+
+test-ui:
+	node --no-warnings --experimental-vm-modules test/ui_chain.mjs

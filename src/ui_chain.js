@@ -141,26 +141,52 @@ function gp(key) {
     return (v === null || v === undefined) ? null : String(v);
 }
 
+/* Read one key, keeping `prev` when it does not come back.
+ *
+ * A gp() is a BLOCKING round-trip to the shim, serviced once per SPI frame
+ * (~23 ms) and abandoned after 100 ms — schwung's comment above
+ * js_shadow_get_param calls it "the where-does-the-tick-time-go measurement".
+ * The channel serves roughly 44 reads a second in total, and this editor was
+ * asking for 120. Past the ceiling reads TIME OUT and return null; folding
+ * null into a literal default puts that default in the mirror, and the mirror
+ * is written back to the DSP on the next knob turn. */
+function gpNumOr(key, prev) {
+    const s = gp(key);
+    if (s === null || s === '') return prev;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : prev;
+}
+
+/* decodeDelta reports ACCUMULATED encoder movement — one brisk turn arrives as
+ * a single event carrying 20 or more. Key is a twelve-entry enum and Scale
+ * shorter still, so a raw delta pinned them to an end stop and made every
+ * value in between unreachable by a normal turn. Cap at a quarter of the
+ * range, counted in steps. */
+function scaledSteps(delta, min, max, step) {
+    const span = Math.max(1, Math.round((max - min) / (step || 1)));
+    const cap = Math.max(1, Math.ceil(span / 4));
+    const mag = Math.min(Math.abs(delta), cap);
+    return delta > 0 ? mag : -mag;
+}
+
 function fetchAll() {
-    for (let i = 0; i < KNOBS.length; i++) {
-        const v = gp(KNOBS[i].key);
-        if (v !== null) knobValues[i] = parseFloat(v) || 0;
-    }
+    for (let i = 0; i < KNOBS.length; i++)
+        knobValues[i] = gpNumOr(KNOBS[i].key, knobValues[i]);
     for (let i = 0; i < KNOBS2.length; i++) {
         if (!KNOBS2[i]) continue;
-        const v = gp(KNOBS2[i].key);
-        if (v !== null) knob2Values[i] = parseFloat(v) || 0;
+        knob2Values[i] = gpNumOr(KNOBS2[i].key, knob2Values[i]);
     }
     for (let i = 0; i < 4; i++) {
-        const v = gp(`harm${i + 1}`);
-        if (v !== null) {
-            harm[i] = parseInt(v) || 0;
-            if (harm[i] > 0) lastItv[i] = harm[i];
-        }
+        const v = gpNumOr(`harm${i + 1}`, harm[i]);
+        harm[i] = v;
+        if (harm[i] > 0) lastItv[i] = harm[i];
     }
-    hwInput = gp('hw_input') === '1';
-    monitorOn = (gp('monitor') || '1') !== '0';
-    hardOn = gp('hard') === '1';
+    const hw = gp('hw_input');
+    if (hw !== null) hwInput = hw === '1';
+    const mon = gp('monitor');
+    if (mon !== null) monitorOn = mon !== '0';
+    const hard = gp('hard');
+    if (hard !== null) hardOn = hard === '1';
 }
 
 function pollStatus() {
@@ -226,7 +252,8 @@ function adjustAny(i, delta, table, vals) {
     const max = k.opts ? k.opts.length - 1 : k.max;
     const min = k.opts ? 0 : k.min;
     const step = k.opts ? 1 : k.step;
-    const v = Math.max(min, Math.min(max, vals[i] + delta * step));
+    const v = Math.max(min, Math.min(max,
+        vals[i] + scaledSteps(delta, min, max, step) * step));
     if (v === vals[i]) return;
     vals[i] = v;
     host_module_set_param(k.key, `${Math.round(v)}`);
@@ -385,14 +412,22 @@ function tick() {
     /* jack state can change mid-session — re-check the guard ~2x/second */
     if (hwInput && tickCount % 15 === 0) reconcileFeedbackGuard();
 
-    /* note display chase: ONE status poll per tick */
-    if (pollStatus()) {
+    /* Note-display chase, every third tick. One poll is one BLOCKING read,
+     * serviced once per SPI frame, so polling every tick claimed the whole
+     * param channel by itself — which is what starved the periodic refresh
+     * below and made its reads time out. Fifteen updates a second still track
+     * a sung note faster than the eye. */
+    if (tickCount % 3 === 0 && pollStatus()) {
         updateStepLEDs();
         needsRedraw = true;
     }
 
-    /* periodic full refresh — device knob edits and preset restores */
-    if (tickCount % 12 === 0) {
+    /* Periodic full refresh — device knob edits and preset restores. Every 24
+     * 48 ticks, not 12: this is ~21 reads and at the old rate it alone was
+     * twice the channel budget. Knob positions only move under our own hand or
+     * from the web editor, so picking a browser-side edit up within about a
+     * second costs nothing real. */
+    if (tickCount % 48 === 0) {
         const oldKnobs = knobValues.join(',');
         const oldHarm = harm.join(',');
         const oldMon = monitorOn;
