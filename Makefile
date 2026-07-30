@@ -4,6 +4,7 @@ CFLAGS = -O2 -g -Wall -Wextra -Iinclude
 .PHONY: test arm clean
 
 test: build/host_sim
+	python3 test/validate_manifests.py
 	./build/host_sim
 
 build/host_sim: src/belt_core.c src/belt_core.h test/host_sim.c
