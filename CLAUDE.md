@@ -76,10 +76,33 @@ key 0-11, scale 0-8 (Chromatic/Major/Minor/HarmMin/Dorian/Mixo/MajPent/
 MinPent/Blues), retune 0-100 (0 = instant), amount, flex, humanize,
 harm1-4 (interval enum: Off/-Oct/-6th/-5th/-4th/-3rd/Unis/+3rd/+4th/+5th/
 +6th/+Oct), harm_level, spread, double_amt, formant -100..100, wet.
+`hard` (instant full correction; Retune/Amount untouched),
+`midi_mode` (Off/Harmony/Target), `vel_sens` 0-100.
 `monitor` (0 mutes output; feedback guard; never preset-saved),
-`hw_input` (set by gen wrapper), `status` = "note10:cents:voiced:mask"
-(ONE UI poll per tick), `state` = JSON preset blob (bounded appends —
+`hw_input` (set by gen wrapper),
+`status` = "note10:cents:voiced:mask:held:hard"
+(ONE UI poll per tick; `hard` is the EFFECTIVE value — param latch OR
+momentary control note — so the UI never re-reads the param, and `mask`
+counts a voice pinned to a held note as active),
+`state` = JSON preset blob (bounded appends —
 the smack snprintf OOB lesson is baked in + regression-tested).
+
+## MIDI notes (played harmony / target)
+
+`belt_on_midi` handles note on/off and CC64 from EVERY source — pads,
+sequenced clips, external keys — because clip chords driving the harmonies
+under an overtake is the point. Note bookkeeping is UNCONDITIONAL;
+`midi_mode` gates where the notes are USED, never the note-off. Gating the
+off would strand a held note across a mode flip and leave a voice pinned
+forever (regression-tested: sim test 23). The CC param path keeps its
+EXTERNAL/FX_BROADCAST source filter — notes and CC take separate branches.
+
+Voice assignment is stable across chord changes: a voice keeps its note
+while that note is down, freed voices take the newest unassigned notes, and
+when the chord outgrows the 4-voice pool the newest press steals the voice
+holding the OLDEST note. Control notes 0/1/2 (C-2 range, below any sung or
+played material) are momentary hard / full doubler / harmony mute; they
+follow `midi_mode` and always clear on release.
 
 ## Chain UI (src/ui_chain.js, shipped in both tarballs)
 
@@ -89,7 +112,8 @@ Pads 68-71 = harmony voices (tap toggle, Shift+tap cycles interval),
 Steps 1-12 = chromatic tuner strip (in-scale dim, detected note green when
 within 25 cents, orange otherwise; press = set Key), steps 13-16 = voice
 indicators. Knobs: Key, Scale, Retune, Amount, Harm, Dbl, Formant, Wet;
-Shift page: Humanize, Flex, Spread, Monitor. QuickJS modules are strict
+Shift page: Humanize, Flex, Spread, Monitor, MIDI, Vel. The header shows
+`MIDI:n` while n notes are held. QuickJS modules are strict
 mode — audit for assigned-but-undeclared identifiers before shipping
 (the smack punchPad lesson).
 
@@ -136,8 +160,10 @@ Catalog PR to charlesvestal/schwung: only after hardware test (house rule).
 
 ## MIDI CC control
 
-`belt_on_midi` maps external CC 20–35 onto the 16 `param_table` entries in
+`belt_on_midi` maps external CC 20–37 onto the 18 `param_table` entries in
 order, 0–127 scaled linearly into each range (see README for the table).
+New params are APPENDED to `param_table` so shipped CC numbers never shift
+(`midi_mode` = 36, `vel_sens` = 37).
 Rules, grounded in schwung's routing (verified in schwung src 2026-07-24):
 
 - Accept ONLY `MOVE_MIDI_SOURCE_EXTERNAL` and `MOVE_MIDI_SOURCE_FX_BROADCAST`
