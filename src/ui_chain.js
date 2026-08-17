@@ -107,11 +107,16 @@ const KNOBS2 = [
       speech: 'Harmony spread' },
     { key: 'monitor',  name: 'Mon',  opts: ['Mute', 'On'],
       speech: 'Monitoring', speechOpts: ['muted', 'on'] },
-    null, null, null, null
+    { key: 'midi_mode', name: 'MIDI', opts: ['Off', 'Harm', 'Targ'],
+      speech: 'MIDI notes',
+      speechOpts: ['off', 'played harmony', 'target note'] },
+    { key: 'vel_sens',  name: 'Vel',  min: 0, max: 100, step: 5,
+      speech: 'Velocity sensitivity', unit: ' percent' },
+    null, null
 ];
 
 let knobValues = [0, 1, 25, 100, 80, 0, 0, 100];
-let knob2Values = [30, 0, 70, 1, 0, 0, 0, 0];
+let knob2Values = [30, 0, 70, 1, 1, 50, 0, 0];
 let harm = [0, 0, 0, 0];
 /* interval each voice returns to when toggled back on */
 let lastItv = [7, 9, 11, 1];
@@ -126,6 +131,7 @@ let shiftHeld = false;
 /* hard-tune punch */
 const HARD_HOLD_MS = 350;
 let hardOn = false;
+let heldNotes = 0;       /* MIDI notes currently held (pads, clips, keys) */
 let hardHeldAt = 0;
 
 /* Feedback guard — belt-in only (hw_input=1: the DSP reads the mic/line
@@ -160,7 +166,9 @@ function fetchAll() {
     }
     hwInput = gp('hw_input') === '1';
     monitorOn = (gp('monitor') || '1') !== '0';
-    hardOn = gp('hard') === '1';
+    /* hardOn is NOT read here: status carries the EFFECTIVE hard state
+     * (param latch OR momentary control note) every tick, so re-reading the
+     * param would drop the momentary and cost a round-trip besides */
 }
 
 function pollStatus() {
@@ -171,8 +179,16 @@ function pollStatus() {
     const n = parseInt(parts[0]);
     const c = parseInt(parts[1]);
     const v = parseInt(parts[2]);
-    const changed = (n !== detNote10) || (Math.abs(c - cents) > 4) || (v !== voiced);
-    detNote10 = n; cents = c; voiced = v;
+    /* fields 5 and 6 arrived with played harmony; tolerate the older
+     * four-field form so a stale core can't blank the display */
+    const h = parts.length > 4 ? parseInt(parts[4]) : heldNotes;
+    const hd = parts.length > 5 ? parts[5] === '1' : hardOn;
+    let changed = (n !== detNote10) || (Math.abs(c - cents) > 4) || (v !== voiced);
+    if (h !== heldNotes) changed = true;
+    /* effective hard includes the momentary control note, which never
+     * touches the param — take it from status rather than re-reading */
+    if (hd !== hardOn) { hardOn = hd; updateActionLEDs(); changed = true; }
+    detNote10 = n; cents = c; voiced = v; heldNotes = h;
     return changed;
 }
 
@@ -296,6 +312,7 @@ function drawUI() {
         title += ` ${c >= 0 ? '+' : ''}${c}c`;
     }
     if (hardOn) title += ' HARD';
+    if (heldNotes > 0) title += ` MIDI:${heldNotes}`;
     drawHeader(title);
 
     /* two rows of four knob params (Shift = page 2) */
@@ -396,7 +413,6 @@ function tick() {
         const oldKnobs = knobValues.join(',');
         const oldHarm = harm.join(',');
         const oldMon = monitorOn;
-        const oldHard = hardOn;
         fetchAll();
         if (knobValues.join(',') !== oldKnobs) {
             updateStepLEDs();
@@ -408,7 +424,6 @@ function tick() {
             needsRedraw = true;
         }
         if (monitorOn !== oldMon) { updateActionLEDs(); needsRedraw = true; }
-        if (hardOn !== oldHard) { updateActionLEDs(); needsRedraw = true; }
     }
 
     if (needsRedraw) drawUI();
