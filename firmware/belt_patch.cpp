@@ -38,6 +38,7 @@ extern "C" {
 #include "vendor/plugin_api_v1.h"
 }
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -120,12 +121,17 @@ static int16_t bufi[BLOCK_SIZE * 2];
  * Versio path, which is interleaving. That suits the Patch: the hardware is
  * 4-in/4-out and belt_process is stereo, so the channel split has to be
  * explicit anyway. Audio In 1/2 carry the voice, Audio Out 1/2 carry the
- * result, and Outs 3/4 are driven to silence rather than left undefined.
+ * processed result.
  *
- * Outs 3/4 are where discrete per-harmony outputs would go -- the reason this
- * port is interesting on a 4-out module at all -- but belt_process mixes its
- * seven voices down internally, so exposing them is a core change and not
- * part of this port. */
+ * Outs 3/4 carry the DRY input, latency-matched by nothing -- it is a straight
+ * thru, so it is early by BELT_LATENCY relative to the wet pair. That is the
+ * useful arrangement for parallel processing: send the dry to a compressor or
+ * a delay and recombine downstream, where a fixed offset is a design choice
+ * rather than a defect.
+ *
+ * What outs 3/4 are NOT is one harmony each. That is the thing a 4-out module
+ * ought to offer Belt, but belt_process mixes its seven voices to stereo
+ * internally, so exposing them is a core change and not part of this port. */
 static void AudioCallback(AudioHandle::InputBuffer  in,
                           AudioHandle::OutputBuffer out,
                           size_t                    size)
@@ -148,9 +154,66 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     {
         out[0][i] = (float)bufi[i * 2]     / 32767.0f;
         out[1][i] = (float)bufi[i * 2 + 1] / 32767.0f;
-        out[2][i] = 0.0f;
-        out[3][i] = 0.0f;
+        out[2][i] = in[0][i];    /* dry thru */
+        out[3][i] = in[1][i];
     }
+}
+
+/* ---- CV and gate outputs ------------------------------------------------ */
+
+/*
+ * This is what makes Belt worth running on a Eurorack module rather than a
+ * laptop: the pitch tracker is already there, so expose it.
+ *
+ *   CV Out 1   detected pitch as 1V/oct, 0 V = C2 (65.406 Hz)
+ *   CV Out 2   harmony level, as a plain 0-5 V control voltage
+ *   Gate Out   high while the tracker says the input is voiced
+ *
+ * Sing into it and the rack gets a pitch CV and a gate. Belt's tracking range
+ * is BELT_FMIN..BELT_FMAX, 85-1000 Hz, which is 0.38 V to 3.93 V on this
+ * scaling -- comfortably inside the Patch's 0-5 V output span, with no
+ * clipping at either end of the vocal range.
+ *
+ * Pitch is HELD when unvoiced rather than dropped to zero, because a pitch CV
+ * that collapses between phrases would slam whatever it is driving. The gate
+ * is what says "this is a note"; the CV just stays where it was.
+ */
+#define CV_FULL_SCALE_V 5.0f
+#define CV_REF_HZ       65.406f   /* C2 -> 0 V */
+
+static uint16_t g_cv_pitch_last;
+
+static void update_cv_outs(void)
+{
+    char buf[24];
+
+    /* Voiced -> gate. */
+    int voiced = 0;
+    if(belt_get_param(B, "voiced", buf, sizeof(buf)) >= 0) voiced = atoi(buf);
+    hw.gate_output.Write(voiced != 0);
+
+    /* Pitch -> 1V/oct. belt_get_param formats this with %.2f, which is why
+     * the Makefile links -u _printf_float; without it this reads as "". */
+    if(voiced && belt_get_param(B, "detected_freq", buf, sizeof(buf)) >= 0)
+    {
+        float f = (float)atof(buf);
+        if(f >= BELT_FMIN && f <= BELT_FMAX)
+        {
+            float v = log2f(f / CV_REF_HZ);
+            if(v < 0.0f) v = 0.0f;
+            if(v > CV_FULL_SCALE_V) v = CV_FULL_SCALE_V;
+            g_cv_pitch_last = (uint16_t)(v / CV_FULL_SCALE_V * 4095.0f);
+        }
+    }
+    hw.seed.dac.WriteValue(DacHandle::Channel::ONE, g_cv_pitch_last);
+
+    /* Harmony level -> CV out 2, so the rack can see what Belt is doing. */
+    int hl = 0;
+    if(belt_get_param(B, "harm_level", buf, sizeof(buf)) >= 0) hl = atoi(buf);
+    if(hl < 0) hl = 0;
+    if(hl > 100) hl = 100;
+    hw.seed.dac.WriteValue(DacHandle::Channel::TWO,
+                           (uint16_t)(hl * 4095 / 100));
 }
 
 /* ---- display ------------------------------------------------------------ */
@@ -280,6 +343,11 @@ int main(void)
                 if(idx >= 0 && idx < 16) g_cc[idx] = ev.data[1];
             }
         }
+
+        /* CV and gate track the voice, so they run every loop pass rather
+         * than at the display's 20 Hz — a gate that lagged 50 ms would be
+         * useless for triggering an envelope. */
+        update_cv_outs();
 
         /* ~20 Hz is plenty for a readout and keeps SPI off the audio ISR's back. */
         uint32_t now = System::GetNow();

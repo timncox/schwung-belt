@@ -46,11 +46,26 @@ C_SOURCES = patch_alloc.c belt_core_patch.c
 # -ffast-math: the formant and harmony paths depend on float ordering.
 OPT = -Os
 
-# NOTE: no `-u _printf_float` here, deliberately. That flag is needed whenever
-# newlib-nano has to format a %f (it silently prints nothing otherwise — see
-# reference_newlib_nano_printf_float). This firmware only ever prints strings
-# returned by belt_get_param, so it is not needed. If you add a %f to the
-# display code, you must add the flag or the field will render empty.
-
 SYSTEM_FILES_DIR = $(LIBDAISY_DIR)/core
 include $(SYSTEM_FILES_DIR)/Makefile
+
+# REQUIRED. newlib-nano declares _printf_float as a weak reference that nothing
+# defines under --specs=nano.specs; unresolved, vfprintf skips the conversion
+# entirely — no error, no warning, no truncation marker, and atoi() then sees 0.
+#
+# It is easy to talk yourself out of this flag by auditing your OWN printf
+# calls, which is what happened here: this shim formats only %s. But the two
+# values it displays come from belt_get_param, and the ENGINE formats them:
+#
+#   belt_core.c:783   snprintf(buf, n, "%.2f", (double)b->note_inst)  detected_note
+#   belt_core.c:785   snprintf(buf, n, "%.2f", (double)b->f_inst)     detected_freq
+#
+# Without the flag the pitch readout renders empty on hardware while every
+# host test stays green, because glibc formats %f perfectly. That exact bug
+# cost hours on smack-versio's LIVE mode (play_frame, "%.0f" -> "" -> 0).
+#
+# Applied after the include so it appends to libDaisy's LDFLAGS rather than
+# replacing them. Costs ~4.5 KB. Verify on the built ELF:
+#   arm-none-eabi-nm build/belt_patch.elf | grep _printf_float
+# Empty output means every %f in the image is silently producing nothing.
+LDFLAGS += -u _printf_float

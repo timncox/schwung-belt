@@ -64,17 +64,39 @@ holds `.text`. If the YIN tracker turns out to be CPU-bound, move `in_ring`
 | Knobs 1–4 | The four params on the current page (pickup required) |
 | Audio In 1/2 | Voice in |
 | Audio Out 1/2 | Processed out |
-| Audio Out 3/4 | Silent — see below |
+| Audio Out 3/4 | **Dry thru** — straight from the input, early by `BELT_LATENCY` |
+| **CV Out 1** | **Detected pitch, 1V/oct, 0 V = C2 (65.406 Hz)** |
+| **CV Out 2** | **Harmony level, 0–5 V** |
+| **Gate Out** | **High while the input is voiced** |
 | MIDI In | CC 20–35 drive all 16 params directly |
 
 Display shows the page, the detected note (`?` when unvoiced), and each param's
 value.
 
+## Pitch to CV
+
+Belt already runs a YIN tracker, so the Patch's CV outputs turn it into
+something no other module in the rack does: **sing into it and get 1V/oct plus
+a gate.**
+
+Belt's tracking range is `BELT_FMIN`–`BELT_FMAX`, 85–1000 Hz, which on this
+scaling is 0.38 V to 3.93 V — comfortably inside the 0–5 V output span with no
+clipping at either end of the vocal range.
+
+Pitch is **held** when unvoiced rather than dropped to zero; a pitch CV that
+collapsed between phrases would slam whatever it drives. The gate says "this is
+a note"; the CV just stays where it was.
+
+This needs `-u _printf_float` in the link line, because `belt_get_param`
+formats `detected_freq` with `%.2f`. See the Makefile — it is not optional and
+it is not obvious.
+
 ## Known gaps
 
-- **Outs 3/4 are silent.** The interesting thing a 4-out module offers Belt is
-  four discrete harmony outputs, one per voice. `belt_process` mixes its seven
-  voices to stereo internally, so that is a core change, not a shim change.
+- **Outs 3/4 are dry thru, not per-harmony outputs.** Four discrete harmony
+  outs is the thing a 4-out module ought to offer Belt, but `belt_process`
+  mixes its seven voices to stereo internally, so that is a core change, not a
+  shim change.
 - **No persistence.** The Patch has an SD card and the Seed has QSPI; neither is
   wired up. Params reset to `belt_create()` defaults on power-up.
 - **Gate inputs unused.**
