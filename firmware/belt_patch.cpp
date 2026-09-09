@@ -166,7 +166,9 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
  * laptop: the pitch tracker is already there, so expose it.
  *
  *   CV Out 1   detected pitch as 1V/oct, 0 V = C2 (65.406 Hz)
- *   CV Out 2   harmony level, as a plain 0-5 V control voltage
+ *   CV Out 2   the first enabled harmony voice's note, 1V/oct on the same
+ *              scale -- or the corrected lead's quantized target when no
+ *              harmony is on
  *   Gate Out   high while the tracker says the input is voiced
  *
  * Sing into it and the rack gets a pitch CV and a gate. Belt's tracking range
@@ -174,14 +176,30 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
  * scaling -- comfortably inside the Patch's 0-5 V output span, with no
  * clipping at either end of the vocal range.
  *
+ * CV Out 2 used to echo harm_level, a knob position. The rack already has
+ * the knob; what it does not have is the note Belt is singing that the input
+ * is not. Two 1V/oct outs make a two-voice pitch-to-CV: an oscillator on CV 1
+ * follows the singer, one on CV 2 follows the harmony Belt chose for them,
+ * both gated by the voice.
+ *
  * Pitch is HELD when unvoiced rather than dropped to zero, because a pitch CV
  * that collapses between phrases would slam whatever it is driving. The gate
  * is what says "this is a note"; the CV just stays where it was.
  */
 #define CV_FULL_SCALE_V 5.0f
 #define CV_REF_HZ       65.406f   /* C2 -> 0 V */
+#define CV_REF_NOTE     36.0f     /* the same C2, as a MIDI note */
 
 static uint16_t g_cv_pitch_last;
+static uint16_t g_cv_harm_last;
+
+static uint16_t note_to_dac(float note)
+{
+    float v = (note - CV_REF_NOTE) / 12.0f;
+    if(v < 0.0f) v = 0.0f;
+    if(v > CV_FULL_SCALE_V) v = CV_FULL_SCALE_V;
+    return (uint16_t)(v / CV_FULL_SCALE_V * 4095.0f);
+}
 
 static void update_cv_outs(void)
 {
@@ -207,13 +225,12 @@ static void update_cv_outs(void)
     }
     hw.seed.dac.WriteValue(DacHandle::Channel::ONE, g_cv_pitch_last);
 
-    /* Harmony level -> CV out 2, so the rack can see what Belt is doing. */
-    int hl = 0;
-    if(belt_get_param(B, "harm_level", buf, sizeof(buf)) >= 0) hl = atoi(buf);
-    if(hl < 0) hl = 0;
-    if(hl > 100) hl = 100;
-    hw.seed.dac.WriteValue(DacHandle::Channel::TWO,
-                           (uint16_t)(hl * 4095 / 100));
+    /* Harmony -> CV out 2, 1V/oct on the same scale. harm_note is a MIDI note
+     * formatted "%.2f" -- the second reason this build needs _printf_float.
+     * Held while unvoiced for the same reason as the pitch CV. */
+    if(voiced && belt_get_param(B, "harm_note", buf, sizeof(buf)) >= 0)
+        g_cv_harm_last = note_to_dac((float)atof(buf));
+    hw.seed.dac.WriteValue(DacHandle::Channel::TWO, g_cv_harm_last);
 }
 
 /* ---- display ------------------------------------------------------------ */

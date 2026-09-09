@@ -66,7 +66,7 @@ holds `.text`. If the YIN tracker turns out to be CPU-bound, move `in_ring`
 | Audio Out 1/2 | Processed out |
 | Audio Out 3/4 | **Dry thru** — straight from the input, early by `BELT_LATENCY` |
 | **CV Out 1** | **Detected pitch, 1V/oct, 0 V = C2 (65.406 Hz)** |
-| **CV Out 2** | **Harmony level, 0–5 V** |
+| **CV Out 2** | **First enabled harmony voice, 1V/oct on the same scale** (the corrected lead's target note when no harmony is on) |
 | **Gate Out** | **High while the input is voiced** |
 | MIDI In | CC 20–35 drive all 16 params directly |
 
@@ -83,13 +83,20 @@ Belt's tracking range is `BELT_FMIN`–`BELT_FMAX`, 85–1000 Hz, which on this
 scaling is 0.38 V to 3.93 V — comfortably inside the 0–5 V output span with no
 clipping at either end of the vocal range.
 
-Pitch is **held** when unvoiced rather than dropped to zero; a pitch CV that
-collapsed between phrases would slam whatever it drives. The gate says "this is
-a note"; the CV just stays where it was.
+**CV Out 2 is the harmony, not a knob.** It carries the first enabled harmony
+voice's note as 1V/oct on the same scale, so an oscillator on CV 1 follows the
+singer and one on CV 2 follows the harmony Belt chose for them — a two-voice
+pitch-to-CV, both gated by the voice. With no harmony on it carries the
+corrected lead's target note instead, which is the quantized version of CV 1.
+(It used to echo `harm_level`, a knob position; the rack already has the knob.)
+
+Both pitches are **held** when unvoiced rather than dropped to zero; a pitch CV
+that collapsed between phrases would slam whatever it drives. The gate says
+"this is a note"; the CVs just stay where they were.
 
 This needs `-u _printf_float` in the link line, because `belt_get_param`
-formats `detected_freq` with `%.2f`. See the Makefile — it is not optional and
-it is not obvious.
+formats `detected_freq` and `harm_note` with `%.2f`. See the Makefile — it is
+not optional and it is not obvious.
 
 ## Known gaps
 
@@ -100,5 +107,12 @@ it is not obvious.
 - **No persistence.** The Patch has an SD card and the Seed has QSPI; neither is
   wired up. Params reset to `belt_create()` defaults on power-up.
 - **Gate inputs unused.**
+- **CV inputs unused — and with paged knobs they cannot be used.** libDaisy's
+  `DaisyPatch` exposes four analog controls, not eight: each CV jack is summed
+  with its knob before the ADC, so a cable in CV 1 would steer whatever param
+  is on the current page and defeat pickup. Giving the CV inputs a job means
+  fixing four params to the knobs and moving the other twelve to an encoder
+  menu, as the Smack and Mark ports do. Which four is a design decision, not
+  a port decision, so it is left open here.
 - **Nothing has been heard on hardware.** The build is clean and the memory map
   is measured; that is all that is known.

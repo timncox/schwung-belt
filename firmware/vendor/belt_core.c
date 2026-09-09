@@ -783,6 +783,19 @@ int belt_get_param(belt_t *b, const char *key, char *buf, int buf_len) {
         return snprintf(buf, (size_t)buf_len, "%.2f", (double)b->note_inst);
     if (!strcmp(key, "detected_freq"))
         return snprintf(buf, (size_t)buf_len, "%.2f", (double)b->f_inst);
+    if (!strcmp(key, "harm_note")) {
+        /* MIDI note of the first enabled harmony voice, or the corrected
+         * lead's quantized target when no harmony is on: the note Belt is
+         * singing that the input is not. Read-only, for the Daisy CV outs. */
+        float n = b->q_note;
+        for (int i = 0; i < BELT_HARMONIES; i++) {
+            if (b->harm[i] != ITV_OFF) {
+                n = harm_target(b, b->q_note, b->harm[i]);
+                break;
+            }
+        }
+        return snprintf(buf, (size_t)buf_len, "%.2f", (double)n);
+    }
 
     if (!strcmp(key, "state")) {
         int w = 0;
