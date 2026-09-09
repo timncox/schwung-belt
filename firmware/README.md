@@ -17,14 +17,42 @@ Needs libDaisy built at `~/tim-os/daisy-sdk/libDaisy` (override with
 
 ## Flashing
 
-Builds `BOOT_NONE` by default, which fits internal flash with room to spare
-(77,808 B of 131,072 B — 59% used). That means it flashes with the **STM32 ROM
-DFU baked into the silicon**: hold **BOOT**, tap **RESET**, release BOOT, and
-the board sits in DFU indefinitely as `0483:df11`. No Daisy bootloader, no QSPI
-write, and none of the ~2000 ms bootloader DFU window smack-versio has to race.
+Builds `BOOT_SRAM`. Belt fits internal flash with room to spare (94,816 B of
+131,072 B), and the first cut was `BOOT_NONE` for exactly that reason: it
+flashed with the STM32 ROM DFU baked into the silicon, no bootloader, no
+~2000 ms window to race. What changed is the module picker below, which needs
+every app to run under the Daisy bootloader.
 
-This is the opposite of smack-versio's situation, where a ~137 KB image forced
-`BOOT_SRAM` and a bootloader install.
+So, once: board in ST ROM DFU (hold **BOOT**, tap **RESET**, release BOOT),
+then `make -C firmware program-boot` installs the bootloader. After that
+`make -C firmware program-dfu` has to hit the bootloader's ~2 s DFU window on
+power-up — or, simpler, the `.bin` goes on the card.
+
+## Switching modules from the panel
+
+All three Patch ports share `module_picker.cpp`. The SD card is a module
+library: put `belt.bin`, `smack.bin` and `mark.bin` in a `modules` folder on a
+FAT32 card, leave the card in the slot, and switch from the screen:
+
+1. Hold the encoder for a second. The list appears: `back`, then every `.bin`
+   in `/modules`. (Belt has no other press gesture; Smack and Mark reach the
+   same screen from a `mods` menu item.)
+2. Turn to choose, press to load. The file is written into the Daisy
+   bootloader's QSPI app slot (the same place a USB flash writes), verified
+   byte for byte, and the module resets into the bootloader, which boots it.
+   A few seconds; the card never leaves the slot.
+
+Keep `.bin` files **out of the card's root**: the bootloader itself flashes
+the first root `.bin` it finds at every power-up, a cruder mechanism that would
+fight the picker.
+
+If a load fails the screen says why (`no card`, `no folder`, `flash build` for
+an image built for internal flash, `verify failed`) and the running module
+carries on. A failed write does leave the QSPI slot invalid until the next
+successful load, so a power cycle in that state lands in the bootloader
+waiting for USB — nothing is lost, it just needs a `make program-dfu`.
+
+A switch is a reset: whatever is playing stops.
 
 ## Port decisions
 
@@ -60,7 +88,8 @@ holds `.text`. If the YIN tracker turns out to be CPU-bound, move `in_ring`
 
 | Control | Function |
 |---|---|
-| Encoder | Select page: `TUNE` / `HARM A` / `HARM B` / `VOICE` |
+| Encoder turn | Select page: `TUNE` / `HARM A` / `HARM B` / `VOICE` |
+| Encoder hold > 1 s | Module picker — switch firmware from the card |
 | Knobs 1–4 | The four params on the current page (pickup required) |
 | Audio In 1/2 | Voice in |
 | Audio Out 1/2 | Processed out |

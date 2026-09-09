@@ -13,28 +13,30 @@ TARGET = belt_patch
 
 LIBDAISY_DIR ?= $(HOME)/tim-os/daisy-sdk/libDaisy
 
-# BOOT_NONE, and unlike smack-versio that is not a close call.
+# BOOT_SRAM since 2026-09-09 — for the module picker, not for size.
 #
-# Measured 2026-09-08 on the first working build:
-#   BOOT_NONE   FLASH 77808 B / 131072 B = 59.36%  (53264 B free)
-#   BOOT_SRAM   .bin  77656 B
+# Belt fits internal flash with room to spare (94816 B of 131072 B, 72%), and
+# the first cut was BOOT_NONE for exactly that reason: it flashed with the
+# STM32 ROM DFU baked into the silicon — no bootloader, no QSPI write, no
+# ~2000 ms window to race.
 #
-# smack-versio had to take BOOT_SRAM because its image was ~137 KB against the
-# STM32H750's 128 KB of internal flash. Belt is far under: belt_core is 796
-# lines of self-contained DSP, and this shim deliberately pulls in no USB
-# serial logger — which was 7.1 KB of smack-versio's overrun on its own.
+# What changed: all three Patch ports can now switch firmware from the front
+# panel (module_picker.cpp). That works by writing the chosen .bin from the SD
+# card into the Daisy bootloader's QSPI app slot and resetting into the
+# bootloader, which needs the bootloader in internal flash and every app built
+# to run under it. BOOT_SRAM runs from the 480 KB AXI SRAM at internal-flash
+# speed; Belt uses a fifth of it.
 #
-# The practical consequence is the whole reason to prefer it: BOOT_NONE flashes
-# with the STM32 ROM DFU that is baked into the silicon. No Daisy bootloader in
-# internal flash, no QSPI write (ST ROM DFU cannot write QSPI anyway), and no
-# ~2000 ms bootloader DFU window to race — hold BOOT, tap RESET, and the device
-# sits in DFU indefinitely.
-#
-# If a future feature pushes this over 131072 B, switch to BOOT_SRAM and follow
-# smack-versio's FLASHING.md.
-APP_TYPE ?= BOOT_NONE
+# Cost: the bootloader installed once (make program-boot, from ST ROM DFU).
+# USB flashing afterwards has to hit the bootloader's ~2000 ms window — but the
+# point is that USB is no longer the path: put the .bin in /modules on the card
+# and pick it on the screen. See module_picker.h.
+APP_TYPE ?= BOOT_SRAM
 
-CPP_SOURCES = belt_patch.cpp
+# FatFS is not in libdaisy.a; this compiles it into the app for the picker.
+USE_FATFS = 1
+
+CPP_SOURCES = belt_patch.cpp module_picker.cpp
 
 # belt_core_patch.c #includes vendor/belt_core.c with calloc/free redirected
 # to the bump allocator. Never list vendor/belt_core.c here as well — that

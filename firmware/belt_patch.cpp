@@ -32,6 +32,7 @@
  */
 #include "daisy_patch.h"
 #include "patch_alloc.h"
+#include "module_picker.h"
 
 extern "C" {
 #include "vendor/belt_core.h"
@@ -308,6 +309,16 @@ int main(void)
     for(;;)
     {
         hw.ProcessAllControls();
+
+        /* Hold the encoder for a second: the module picker (module_picker.h).
+         * Belt has no other press gesture, so a hold is free here; Smack and
+         * Mark reach the same screen from a menu item. It returns only when
+         * the user backs out, after the encoder is released. */
+        if(hw.encoder.Pressed() && hw.encoder.TimeHeldMs() > 1000.0f)
+        {
+            picker::run(hw);
+            page_reset();   /* the knobs may have moved meanwhile */
+        }
 
         /* Encoder turns pages; every page change re-arms pickup. */
         int inc = hw.encoder.Increment();
