@@ -50,10 +50,17 @@ static DaisyPatch hw;
 static belt_t    *B;
 static host_api_v1_t HOST;
 
-/* 128 was measured on smack-versio as the block size its clock regression
- * needs. Belt has no clock model, but 128 is also what the Move host uses,
- * so the engine has only ever run at this block size. Keep it. */
-#define BLOCK_SIZE 128
+/* 256 since 2026-09-22, = YIN_HOP. At 128 the pitch analysis (YIN, W 512 x
+ * tau 260) landed in every OTHER block, so half the blocks carried it and
+ * overran while the average sat in the 70s: the header meter read c80/99,
+ * then c73/99 with the pool in D2 and -O3. One hop per block spreads that
+ * evenly. The engine is frame-count agnostic (ingest, analysis and grain
+ * firing all loop on `frames`; rings are 4096+), and the one ring a longer
+ * block could outrun, MARKS (64), needs ~29 marks for BELT_LATENCY at the
+ * highest pitch (T_MIN 44) plus ~6 for the block. Cost: ~2.7 ms more
+ * converter-side latency. 128 was the Move host's block and smack-versio's
+ * clock-regression figure; Belt has no clock model. */
+#define BLOCK_SIZE 256
 
 /* ~128 KB measured from belt_core's five calloc()s (see patch_alloc.h);
  * 192 KB leaves room for belt_t and any future ring.
