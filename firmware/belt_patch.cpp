@@ -87,6 +87,17 @@ static const char *const PARAM_NAME[16] = {
     "hrm3", "hrm4",  "hlvl", "sprd",
     "dbl",  "form",  "wet",  "hard",
 };
+/* The engine's own names for the same sixteen, in the same order, for
+ * belt_get_param. PARAM_NAME above is only a four-letter screen label: looking
+ * a value up by the label fails for eleven of the sixteen, belt_get_param then
+ * writes nothing, and the screen printed whatever was on the stack (first
+ * rack-powered run, 2026-09-22: "values wouldn't move or sometimes move"). */
+static const char *const ENGINE_KEY[16] = {
+    "key",  "scale",    "retune", "amount",
+    "flex", "humanize", "harm1",  "harm2",
+    "harm3", "harm4",   "harm_level", "spread",
+    "double_amt", "formant", "wet", "hard",
+};
 static const char *const PAGE_NAME[4] = { "TUNE", "HARM A", "HARM B", "VOICE" };
 
 static int  g_page;                 /* 0..3 */
@@ -273,7 +284,8 @@ static void draw(void)
     {
         int   idx = g_page * 4 + k;
         char  val[12];
-        belt_get_param(B, PARAM_NAME[idx], val, sizeof(val));
+        if(belt_get_param(B, ENGINE_KEY[idx], val, sizeof(val)) < 0)
+            snprintf(val, sizeof(val), "?");
         snprintf(line, sizeof(line), "%-4s %-5s%s",
                  PARAM_NAME[idx], val, g_live[k] ? "" : " *");
         hw.display.SetCursor(0, 16 + k * 10);
