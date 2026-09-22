@@ -58,24 +58,21 @@ static host_api_v1_t HOST;
 /* ~128 KB measured from belt_core's five calloc()s (see patch_alloc.h);
  * 192 KB leaves room for belt_t and any future ring.
  *
- * SDRAM, after the memory map ruled out everything faster. Under
- * STM32H750IB_sram.lds the uninitialised regions are:
+ * D2 SRAM since 2026-09-22. It was SDRAM, after DTCMRAM (128 KB, ~74 KB
+ * free) and RAM_D2_DMA (32 KB) were ruled out; the 480 KB region named SRAM
+ * holds .text in BOOT_SRAM. What that survey missed is RAM_D2: 256 KB at
+ * 0x30008000, just above the 32 KB non-cacheable DMA window, so it is
+ * ordinary cacheable SRAM, clocked by SystemInit, and the stock linker script
+ * puts nothing there but an empty NOLOAD .heap (newlib's heap is unusable
+ * here anyway: its stack check compares against a DTCM stack pointer).
+ * Declaring the pool in section .heap lands it there with no custom script.
+ * NOLOAD means it is not zeroed at boot; patch_calloc memsets, so fine.
  *
- *     .bss / .dtcmram_bss  -> DTCMRAM     128 KB  (~74 KB free) -- too small
- *     .sram1_bss           -> RAM_D2_DMA   32 KB                -- too small
- *     .sdram_bss           -> SDRAM        64 MB                -- fits
- *
- * The 480 KB region named SRAM is not available for data here: in BOOT_SRAM
- * the app's .text lives there. Both faster placements were tried and both
- * overflowed (DTCMRAM by 119252 B, RAM_D2_DMA by 180800 B).
- *
- * SDRAM is the slow pool and the YIN tracker touches in_ring and yin_ring
- * per sample, so this is the thing to watch if CPU becomes the ceiling. It is
- * not a guess that it works -- smack-versio runs a 16 MB SDRAM ring inside its
- * audio callback on the same silicon -- but Belt's access pattern is different
- * and unmeasured. If it stalls, the fix is to move in_ring/yin_ring alone into
- * DTCMRAM (they are 64 KB + 16 KB, which does fit) and leave the rest here. */
-static uint8_t DSY_SDRAM_BSS g_pool[192u * 1024u];
+ * Why: the first rack-powered run read c80/99 on the header meter, i.e. the
+ * callback overran, starving the main loop (knobs, encoder, screen). The YIN
+ * tracker touches in_ring and yin_ring per sample, and SDRAM was the slow
+ * pool. The Alchemy port made the same move (belt-alchemy 7bdba15/ab76eed). */
+static uint8_t __attribute__((section(".heap"), aligned(32))) g_pool[192u * 1024u];
 
 /* ---- control surface ---------------------------------------------------- */
 

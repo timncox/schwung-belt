@@ -43,10 +43,10 @@ CPP_SOURCES = belt_patch.cpp module_picker.cpp
 # would define every engine symbol twice.
 C_SOURCES = patch_alloc.c belt_core_patch.c
 
-# -Os to start; belt_core is float-heavy pitch tracking, so if the YIN pass
-# turns out to be the CPU ceiling, -O2 is the first thing to try. Do NOT add
-# -ffast-math: the formant and harmony paths depend on float ordering.
-OPT = -Os
+# -O3 since 2026-09-22: the first rack-powered run read c80/99 on the header
+# CPU meter (callback overrunning, main loop starved). Same choice as the
+# Alchemy port (belt-alchemy Makefile), which has the same engine and M7.
+OPT = -O3
 
 SYSTEM_FILES_DIR = $(LIBDAISY_DIR)/core
 include $(SYSTEM_FILES_DIR)/Makefile
@@ -71,3 +71,12 @@ include $(SYSTEM_FILES_DIR)/Makefile
 #   arm-none-eabi-nm build/belt_patch.elf | grep _printf_float
 # Empty output means every %f in the image is silently producing nothing.
 LDFLAGS += -u _printf_float
+
+# -ffast-math on the engine's unit ONLY; libDaisy and this shim keep strict
+# IEEE. An earlier note here said the formant and harmony paths depend on
+# float ordering; the Alchemy port measured it instead (belt-alchemy ef21bf6):
+# test_tuner still reads 440 Hz as note 69.00, C3 as 48.00 and hard-tunes
+# 449 Hz to 440.0 built this way. -fno-finite-math-only keeps NaN comparisons
+# honest (the engine has no isnan/isinf guards). Added for the same overrun.
+BELT_ENGINE_FLAGS = -ffast-math -fno-finite-math-only
+$(BUILD_DIR)/belt_core_patch.o: CFLAGS += $(BELT_ENGINE_FLAGS)
