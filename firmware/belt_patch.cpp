@@ -118,6 +118,15 @@ static void send_cc(int idx, int val127)
 
 static int16_t bufi[BLOCK_SIZE * 2];
 
+/* Audio-callback load, shown in the header as avg/peak percent over the last
+ * second. Added 2026-09-22 when the first rack-powered run showed knobs and
+ * pages misbehaving: the same engine overran the M7 on the Alchemy Lab even
+ * with its pool in D2 SRAM, and this port keeps the pool in SDRAM. A callback
+ * near 100 % starves this main loop, which is where the knobs, encoder and
+ * screen live. */
+static CpuLoadMeter g_cpu;
+static int          g_cpu_avg, g_cpu_peak;   /* percent, last full second */
+
 /* DaisyPatch::StartAudio takes the NON-interleaving callback -- unlike the
  * Versio path, which is interleaving. That suits the Patch: the hardware is
  * 4-in/4-out and belt_process is stereo, so the channel split has to be
@@ -138,6 +147,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
                           size_t                    size)
 {
     /* size is FRAMES in the non-interleaving callback. */
+    g_cpu.OnBlockStart();
     const size_t n = size < BLOCK_SIZE ? size : BLOCK_SIZE;
 
     for(size_t i = 0; i < n; i++)
@@ -158,6 +168,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
         out[2][i] = in[0][i];    /* dry thru */
         out[3][i] = in[1][i];
     }
+    g_cpu.OnBlockEnd();
 }
 
 /* ---- CV and gate outputs ------------------------------------------------ */
@@ -247,8 +258,13 @@ static void draw(void)
     char voiced[8] = "0";
     belt_get_param(B, "voiced", voiced, sizeof(voiced));
 
-    snprintf(line, sizeof(line), "%-7s %s%s",
-             PAGE_NAME[g_page], note, voiced[0] == '1' ? "" : "?");
+    snprintf(line, sizeof(line), "%-7s %s%s", PAGE_NAME[g_page], note,
+             voiced[0] == '1' ? "" : "?");
+    hw.display.SetCursor(0, 0);
+    hw.display.WriteString(line, Font_6x8, true);
+    snprintf(line, sizeof(line), "c%02d/%02d",
+             g_cpu_avg > 99 ? 99 : g_cpu_avg, g_cpu_peak > 99 ? 99 : g_cpu_peak);
+    hw.display.SetCursor(128 - 6 * 6, 0);
     hw.display.SetCursor(0, 0);
     hw.display.WriteString(line, Font_6x8, true);
 
@@ -297,6 +313,7 @@ int main(void)
         for(;;) {}
     }
 
+    g_cpu.Init(hw.AudioSampleRate(), hw.AudioBlockSize());
     hw.StartAdc();
     hw.StartAudio(AudioCallback);
     hw.midi.StartReceive();
@@ -305,6 +322,7 @@ int main(void)
     for(int i = 0; i < 16; i++) g_cc[i] = -1;
 
     uint32_t last_draw = System::GetNow();
+    uint32_t last_cpu  = last_draw;
 
     for(;;)
     {
@@ -379,6 +397,13 @@ int main(void)
 
         /* ~20 Hz is plenty for a readout and keeps SPI off the audio ISR's back. */
         uint32_t now = System::GetNow();
+        if(now - last_cpu >= 1000u)
+        {
+            g_cpu_avg  = (int)(g_cpu.GetAvgCpuLoad() * 100.0f + 0.5f);
+            g_cpu_peak = (int)(g_cpu.GetMaxCpuLoad() * 100.0f + 0.5f);
+            g_cpu.Reset();
+            last_cpu = now;
+        }
         if(now - last_draw >= 50u)
         {
             draw();
