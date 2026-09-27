@@ -18,7 +18,7 @@ EXPECTED_KNOBS = {
         "harm1", "harm2", "harm3", "harm4",
         "harm_level", "spread", "double_amt", "midi_mode",
     ],
-    "setup": ["hard", "wet", "formant", "flex", "humanize", "vel_sens"],
+    "setup": ["hard", "wet", "formant", "flex", "humanize", "vel_sens", "lead"],
 }
 
 

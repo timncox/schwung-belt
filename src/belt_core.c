@@ -124,6 +124,10 @@ struct belt {
     int hard;             /* performance override: instant, full correction */
     int midi_mode;        /* BELT_MIDI_*: what played notes do */
     int vel_sens;         /* 0-100: velocity -> harmony voice level */
+    int lead;             /* 0-100: everything lead-derived -- corrected lead,
+                           * dry voice, doubler. 0 = chord only: just the
+                           * harmony voices on the held notes (the DigiTech
+                           * Vocalist "vocoder" sound of Hide and Seek) */
     int monitor;          /* 0 = output muted (feedback guard, never saved) */
     int hw_input;         /* set by the gen wrapper: mic guard applies */
 
@@ -295,7 +299,7 @@ belt_t *belt_create(const host_api_v1_t *host) {
     b->retune = 25; b->amount = 100; b->flex = 0; b->humanize = 30;
     b->harm_level = 80; b->spread = 70; b->double_amt = 0;
     b->formant = 0; b->wet = 100; b->monitor = 1;
-    b->midi_mode = BELT_MIDI_HARMONY; b->vel_sens = 50;
+    b->midi_mode = BELT_MIDI_HARMONY; b->vel_sens = 50; b->lead = 100;
     for (int i = 0; i < BELT_HELD_MAX; i++) b->held[i].note = -1;
     for (int i = 0; i < BELT_HARMONIES; i++) b->v_note[i] = -1;
 
@@ -490,8 +494,9 @@ static void belt_update_targets(belt_t *b, int frames) {
     /* lead: output = note_slow + off + humanize*residue */
     float lead_out = b->note_slow + b->lead_off + hum01 * residue;
     float wet01 = (float)b->wet / 100.0f;
+    float lead01 = (float)b->lead / 100.0f;
     b->v[0].ratio_tgt = (lead_out - b->note_inst) / 12.0f;
-    b->v[0].gain_tgt = wet01;
+    b->v[0].gain_tgt = wet01 * lead01;
     b->v[0].pan = 0.0f;
 
     /* harmonies: a voice pinned to a played MIDI note sings that note at a
@@ -537,7 +542,7 @@ static void belt_update_targets(belt_t *b, int frames) {
         float sgn = i ? 1.0f : -1.0f;
         v->ratio_tgt = b->v[0].ratio_tgt +
                        sgn * (dcents + v->wander * 0.4f) / 1200.0f;
-        v->gain_tgt = dbl01 * 0.65f * b->voiced_sm;
+        v->gain_tgt = dbl01 * 0.65f * b->voiced_sm * lead01;
         v->wander = clampf(v->wander * 0.999f + rng_bipolar(&b->rng) * 0.25f,
                            -6.0f, 6.0f);
     }
@@ -681,7 +686,9 @@ void belt_process(belt_t *b, const int16_t *in, int16_t *out, int frames) {
     }
 
     /* 6. mix accumulator + latency-matched dry, clear behind ourselves */
-    float dry01 = 1.0f - (float)b->wet / 100.0f;
+    /* the dry voice is the lead too, so LEAD scales it with the corrected
+     * lead: at 0 only the harmony voices reach the output */
+    float dry01 = (1.0f - (float)b->wet / 100.0f) * (float)b->lead / 100.0f;
     uint64_t rd = b->w - (uint64_t)frames;
     int mute = !b->monitor;
     int limit_on = b->wet > 0 || b->double_amt > 0;
@@ -735,6 +742,7 @@ static int param_table(belt_t *b, param_map_t *t) {
     t[n++] = (param_map_t){ "hard",       &b->hard,       0, 1 };
     t[n++] = (param_map_t){ "midi_mode",  &b->midi_mode,  0, 2 };
     t[n++] = (param_map_t){ "vel_sens",   &b->vel_sens,   0, 100 };
+    t[n++] = (param_map_t){ "lead",       &b->lead,       0, 100 };
     return n;
 }
 
@@ -743,6 +751,7 @@ static int param_table(belt_t *b, param_map_t *t) {
  *   20 key   21 scale  22 retune  23 amount  24 flex    25 humanize
  *   26 harm1 27 harm2  28 harm3   29 harm4   30 harm_level  31 spread
  *   32 double_amt  33 formant  34 wet  35 hard  36 midi_mode  37 vel_sens
+ *   38 lead
  * The 0-127 CC value scales linearly into each param's range. New params
  * are APPENDED to param_table so existing CC assignments never shift.
  *
@@ -929,6 +938,9 @@ void belt_set_param(belt_t *b, const char *key, const char *val) {
         return;
     }
     if (!strcmp(key, "state")) {
+        /* blobs saved before `lead` existed mean today's full lead, not
+         * whatever the last patch left it at */
+        b->lead = 100;
         for (int i = 0; i < n; i++) {
             int v;
             if (json_int(val, t[i].key, &v))

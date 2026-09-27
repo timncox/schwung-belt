@@ -49,6 +49,36 @@ static void run_sine(double freq, double amp, int nblocks) {
     }
 }
 
+/* A synthetic sung tone for chord tests: a band-limited buzz (harmonics
+ * 1..N at 1/k, the rough spectrum of a voiced vowel). A pure sine is the
+ * wrong stimulus for big upward shifts: TD-PSOLA keeps the input's
+ * spectral envelope (that is what formant preservation means), and a sine's
+ * envelope is one line at its own frequency, so a +10 st copy has almost
+ * nothing to sound with. A voice has harmonics all the way up. */
+static void run_voice(double freq, double amp, int nblocks) {
+    int16_t in[BLK * 2], out[BLK * 2];
+    int nh = (int)(20000.0 / freq);
+    if (nh > 40) nh = 40;
+    double norm = 0.0;
+    for (int k = 1; k <= nh; k++) norm += 1.0 / k;
+    for (int b = 0; b < nblocks; b++) {
+        for (int i = 0; i < BLK; i++) {
+            sine_phase += freq / 44100.0;
+            if (sine_phase >= 1.0) sine_phase -= 1.0;
+            double x = 0.0;
+            for (int k = 1; k <= nh; k++) x += sin(sine_phase * 2.0 * M_PI * k) / k;
+            int16_t v = (int16_t)(x / norm * 2.2 * 32767.0 * amp);
+            in[i * 2] = in[i * 2 + 1] = v;
+        }
+        belt_process(B, in, out, BLK);
+        for (int i = 0; i < BLK; i++) {
+            cap_l[cap_n & (CAP - 1)] = out[i * 2];
+            cap_r[cap_n & (CAP - 1)] = out[i * 2 + 1];
+            cap_n++;
+        }
+    }
+}
+
 static void snap(float *l, float *r, int n) {  /* last n frames, floats */
     for (int i = 0; i < n; i++) {
         int idx = (cap_n - n + i) & (CAP - 1);
@@ -138,7 +168,7 @@ static void reset_defaults(void) {
     sp("harm1", "0"); sp("harm2", "0"); sp("harm3", "0"); sp("harm4", "0");
     sp("harm_level", "80"); sp("spread", "70"); sp("double_amt", "0");
     sp("formant", "0"); sp("wet", "100"); sp("hard", "0"); sp("monitor", "1");
-    sp("midi_mode", "1"); sp("vel_sens", "50");
+    sp("midi_mode", "1"); sp("vel_sens", "50"); sp("lead", "100");
 }
 
 /* played notes arrive from pads, clips and external keys alike, so the
@@ -547,6 +577,49 @@ int main(void) {
         printf("test 23 no ghost notes    -> E4 power %.5f held=%d\n", p, f[4]);
         assert(f[4] == 0);                /* nothing still held */
         assert(p < 0.5);                  /* and nothing still sounding */
+    }
+
+    reset_defaults();
+
+    /* ---- 24. Hide and Seek: chord only. Sing A3, hold C4-E4-G4 with every
+     * harmony interval Off: the three held notes sound as re-pitched copies
+     * of the voice, and with LEAD 0 neither the corrected lead nor the dry
+     * voice (both at A3) reaches the output. The same run with LEAD 100 is
+     * the reference that proves the A3 power really comes from the lead. */
+    {
+        static const double want[3] = { 261.63, 329.63, 392.00 };
+        static const int nn[3] = { 60, 64, 67 };
+        double lead_on, lead_off, p[3], off_note;
+        sp("wet", "50");                   /* lead AND dry both present */
+        for (int k = 0; k < 3; k++) note(0x90, nn[k], 100);
+        run_voice(220.0, 0.35, 2 * sec);
+        lead_on = tone_power(220.0, 8192);
+        sp("lead", "0");
+        run_voice(220.0, 0.35, 2 * sec);
+        lead_off = tone_power(220.0, 8192);
+        for (int k = 0; k < 3; k++) p[k] = tone_power(want[k], 8192);
+        off_note = tone_power(311.13, 8192);    /* D#4: not held */
+        printf("test 24 chord only        -> A3 lead %.5f -> %.5f | C4 %.3f E4 %.3f G4 %.3f | D#4 %.5f\n",
+               lead_on, lead_off, p[0], p[1], p[2], off_note);
+        assert(lead_on > 1.0);                 /* the lead was really there */
+        assert(lead_off < 0.01 * lead_on);     /* and chord only removes it */
+        for (int k = 0; k < 3; k++) {
+            assert(p[k] > 2.0);                /* every held note sounds */
+            assert(p[k] > 10.0 * off_note);    /* at its pitch, not beside it */
+        }
+        /* the three voices come out at comparable levels */
+        double lo = fmin(p[0], fmin(p[1], p[2])), hi = fmax(p[0], fmax(p[1], p[2]));
+        assert(hi < 4.0 * lo);
+        for (int k = 0; k < 3; k++) note(0x80, nn[k], 0);
+        run_voice(220.0, 0.35, 2 * sec);
+        double silent = out_rms(8192);
+        printf("test 25 chord only, none held -> rms %.5f\n", silent);
+        assert(silent < 0.002);                /* nothing held: silence */
+
+        /* an old preset blob without "lead" restores the full lead */
+        sp("state", "{\"key\":0,\"wet\":100}");
+        assert(!strcmp(gp("lead"), "100"));
+        printf("test 26 old blob -> lead 100\n");
     }
 
     belt_destroy(B);
