@@ -102,9 +102,14 @@ static const char *const ENGINE_KEY[16] = {
     "harm3", "harm4",   "harm_level", "spread",
     "double_amt", "formant", "wet", "hard",
 };
-static const char *const PAGE_NAME[4] = { "TUNE", "HARM A", "HARM B", "VOICE" };
+/* Four param pages, then MODS: push-and-turn there opens the module picker,
+ * the same gesture as the "mods" menu item on every other Patch module. MODS
+ * has no params, so every g_page * 4 index below is guarded against it. */
+#define P_MODS  4
+#define N_PAGES 5
+static const char *const PAGE_NAME[N_PAGES] = { "TUNE", "HARM A", "HARM B", "VOICE", "MODS" };
 
-static int  g_page;                 /* 0..3 */
+static int  g_page;                 /* 0..3 params, 4 = MODS */
 static int  g_cc[16];               /* last CC value sent per param, 0..127 */
 static bool g_live[4];              /* has this knob picked up on this page? */
 static int  g_knob_at[4];           /* last raw knob reading, 0..127 */
@@ -279,9 +284,18 @@ static void draw(void)
     hw.display.WriteString(line, Font_6x8, true);
     snprintf(line, sizeof(line), "c%02d/%02d",
              g_cpu_avg > 99 ? 99 : g_cpu_avg, g_cpu_peak > 99 ? 99 : g_cpu_peak);
-    hw.display.SetCursor(128 - 6 * 6, 0);
-    hw.display.SetCursor(0, 0);
+    hw.display.SetCursor(128 - 6 * 6, 0); /* right edge, clear of the page name */
     hw.display.WriteString(line, Font_6x8, true);
+
+    if(g_page == P_MODS)
+    {
+        hw.display.SetCursor(0, 26);
+        hw.display.WriteString("push + turn:", Font_6x8, true);
+        hw.display.SetCursor(0, 36);
+        hw.display.WriteString("  module picker", Font_6x8, true);
+        hw.display.Update();
+        return;
+    }
 
     /* Four params, value plus a marker when the knob has not picked up. */
     for(int k = 0; k < 4; k++)
@@ -344,26 +358,24 @@ int main(void)
     {
         hw.ProcessAllControls();
 
-        /* Hold the encoder for a second: the module picker (module_picker.h).
-         * Belt has no other press gesture, so a hold is free here; Smack and
-         * Mark reach the same screen from a menu item. It returns only when
-         * the user backs out, after the encoder is released. */
-        if(hw.encoder.Pressed() && hw.encoder.TimeHeldMs() > 1000.0f)
+        /* Encoder turns pages; every page change re-arms pickup. On MODS,
+         * push-and-turn opens the module picker (module_picker.h), the same
+         * gesture as the "mods" item on every other Patch module. It returns
+         * only when the user backs out, after the encoder is released. */
+        int inc = hw.encoder.Increment();
+        if(inc && g_page == P_MODS && hw.encoder.Pressed())
         {
             picker::run(hw);
             page_reset();   /* the knobs may have moved meanwhile */
         }
-
-        /* Encoder turns pages; every page change re-arms pickup. */
-        int inc = hw.encoder.Increment();
-        if(inc)
+        else if(inc)
         {
-            g_page = (g_page + inc) & 3;
+            g_page = ((g_page + inc) % N_PAGES + N_PAGES) % N_PAGES;
             page_reset();
         }
 
-        /* Knobs -> CC, with pickup. */
-        for(int k = 0; k < 4; k++)
+        /* Knobs -> CC, with pickup. MODS has no params. */
+        for(int k = 0; k < 4 && g_page != P_MODS; k++)
         {
             int idx = g_page * 4 + k;
             int raw = (int)(hw.GetKnobValue((DaisyPatch::Ctrl)k) * 127.0f + 0.5f);
