@@ -169,6 +169,14 @@ static void reset_defaults(void) {
     sp("harm_level", "80"); sp("spread", "70"); sp("double_amt", "0");
     sp("formant", "0"); sp("wet", "100"); sp("hard", "0"); sp("monitor", "1");
     sp("midi_mode", "1"); sp("vel_sens", "50"); sp("lead", "100");
+    sp("hold", "0"); sp("hold_mode", "0");
+}
+
+static int status_hold(void) {
+    int f[7] = {0};
+    sscanf(gp("status"), "%d:%d:%d:%d:%d:%d:%d",
+           &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6]);
+    return f[6];
 }
 
 /* played notes arrive from pads, clips and external keys alike, so the
@@ -620,6 +628,82 @@ int main(void) {
         sp("state", "{\"key\":0,\"wet\":100}");
         assert(!strcmp(gp("lead"), "100"));
         printf("test 26 old blob -> lead 100\n");
+    }
+
+    /* ---- 27-29. HOLD, Freeze. Sing A3 in C major with one voice a fifth
+     * up (E4). Freeze while singing, then stop: the E4 voice carries on
+     * through the silence as a pad. Sing C4 over it: the frozen voice stays
+     * on E4 instead of following to G4 (C4's fifth). Release: it fades. */
+    reset_defaults();
+    sp("harm1", "9");                      /* +5th */
+    run_voice(220.0, 0.35, 2 * sec);
+    {
+        double before = tone_power(329.63, 8192);
+        sp("hold_mode", "0");
+        sp("hold", "1");
+        run_voice(220.0, 0.35, sec / 4);
+        int st = status_hold();
+        run_sine(0.0, 0.0, sec);           /* stop singing for a second */
+        double held = tone_power(329.63, 8192);
+        double rms = out_rms(8192);
+        printf("test 27 freeze sustains   -> E4 sung %.3f, after 1 s silence %.3f rms %.4f (status hold=%d)\n",
+               before, held, rms, st);
+        assert(st == 2);                   /* engaged with a frozen source */
+        assert(before > 2.0);
+        assert(held > 0.25 * before);      /* still there with nobody singing */
+        assert(rms > 0.01);
+
+        run_voice(261.63, 0.35, 2 * sec);  /* sing C4 over the frozen chord */
+        double e4 = tone_power(329.63, 8192), g4 = tone_power(392.00, 8192);
+        printf("test 28 freeze ignores C4 -> E4 %.3f G4 %.5f\n", e4, g4);
+        assert(e4 > 1.0);
+        assert(e4 > 20.0 * g4);            /* the harmony did not follow */
+
+        sp("hold", "0");
+        run_sine(0.0, 0.0, sec / 2);
+        double tail = out_rms(4096);
+        printf("test 29 freeze released   -> rms %.5f after 0.5 s (status hold=%d)\n",
+               tail, status_hold());
+        assert(tail < 0.002);              /* faded, and nobody singing */
+        assert(status_hold() == 0);
+    }
+
+    /* ---- 30-31. HOLD, Lock: the voices keep their notes but sing with the
+     * live voice. Lock on A3's fifth (E4), sing C4: E4 again, not G4. Stop
+     * singing: they duck like normal harmonies. */
+    reset_defaults();
+    sp("harm1", "9");
+    run_voice(220.0, 0.35, 2 * sec);
+    {
+        sp("hold_mode", "1");
+        sp("hold", "1");
+        run_voice(220.0, 0.35, sec / 4);
+        int st = status_hold();
+        run_voice(261.63, 0.35, 2 * sec);
+        double e4 = tone_power(329.63, 8192), g4 = tone_power(392.00, 8192);
+        printf("test 30 lock holds E4     -> E4 %.3f G4 %.5f (status hold=%d)\n", e4, g4, st);
+        assert(st == 1);
+        assert(e4 > 1.0);
+        assert(e4 > 20.0 * g4);
+        run_sine(0.0, 0.0, sec);
+        double gap = out_rms(8192);
+        printf("test 31 lock ducks        -> rms %.5f in the gap\n", gap);
+        assert(gap < 0.002);
+        sp("hold", "0");
+    }
+
+    /* ---- 32. HOLD is a performance switch: never in the preset blob, and
+     * a blob can't turn it on. hold_mode is a setting and is saved. */
+    {
+        sp("hold", "1");
+        const char *st = gp("state");
+        printf("test 32 state blob        -> %s\n", st);
+        assert(strstr(st, "\"hold\":") == NULL);
+        assert(strstr(st, "\"hold_mode\":") != NULL);
+        sp("hold", "0");
+        sp("state", "{\"hold\":1,\"hold_mode\":1}");
+        assert(!strcmp(gp("hold"), "0"));
+        assert(!strcmp(gp("hold_mode"), "1"));
     }
 
     belt_destroy(B);
