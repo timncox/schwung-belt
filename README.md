@@ -14,6 +14,11 @@ line-in, or USB-C input. Named Belt because it makes you sound like you can.
 - **Doubler** — instant thickness, hard-panned corrected doubles
 - **Formant** — deeper or brighter without changing pitch
 - **HARD pad** — momentary or latched T-Pain punch
+- **Played harmony** — hold a chord on the pads, in a clip, or on a keyboard
+  and the four voices sing those exact notes; clip chords keep driving them
+  hands-free while another module owns the surface
+- **Target mode** — the held note becomes the correction target: play the
+  melody, sing approximately, land exactly
 - **Tuner strip** — steps 1-12 show your note (green = in tune); press to set the key
 - **Flex / Humanize** — leave expressive slides alone, keep your vibrato
 
@@ -62,6 +67,8 @@ sends CC). The 0–127 CC value scales linearly across each parameter's range.
 | 25 | humanize | 0–100 | 33 | formant | -100–100 |
 | 26 | harm 1 | off..interval | 34 | wet | 0–100 |
 | 27 | harm 2 | off..interval | 35 | hard | ≥64 = on |
+| | | | 36 | midi mode | off/harm/target |
+| | | | 37 | vel sens | 0–100 |
 
 Channel notes:
 

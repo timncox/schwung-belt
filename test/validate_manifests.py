@@ -12,11 +12,13 @@ MANIFESTS = (
 )
 EXPECTED_KNOBS = {
     "root": ["key", "scale", "retune", "amount"],
+    # midi_mode takes the harmony page's last free slot: it decides what
+    # played notes do to these voices, so it belongs beside them
     "harmony": [
         "harm1", "harm2", "harm3", "harm4",
-        "harm_level", "spread", "double_amt",
+        "harm_level", "spread", "double_amt", "midi_mode",
     ],
-    "setup": ["hard", "wet", "formant", "flex", "humanize"],
+    "setup": ["hard", "wet", "formant", "flex", "humanize", "vel_sens"],
 }
 
 

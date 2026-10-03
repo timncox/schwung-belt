@@ -2,7 +2,7 @@
   "id": "belt-in",
   "name": "Belt In",
   "abbrev": "BLTI",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Standalone live-input (mic/line/USB-C) build of Belt: autotune, diatonic harmonies, doubler, formant shift",
   "dsp": "dsp.so",
   "ui_chain": "ui_chain.js",
@@ -210,6 +210,17 @@
               "step": 5,
               "unit": "%",
               "display_format": "%.0f"
+            },
+            {
+              "key": "midi_mode",
+              "name": "MIDI Notes",
+              "type": "enum",
+              "options": [
+                "Off",
+                "Harmony",
+                "Target"
+              ],
+              "default": 1
             }
           ],
           "knobs": [
@@ -219,7 +230,8 @@
             "harm4",
             "harm_level",
             "spread",
-            "double_amt"
+            "double_amt",
+            "midi_mode"
           ]
         },
         "setup": {
@@ -276,6 +288,17 @@
               "step": 5,
               "unit": "%",
               "display_format": "%.0f"
+            },
+            {
+              "key": "vel_sens",
+              "name": "Vel Sens",
+              "type": "float",
+              "min": 0,
+              "max": 100,
+              "default": 50,
+              "step": 5,
+              "unit": "%",
+              "display_format": "%.0f"
             }
           ],
           "knobs": [
@@ -283,7 +306,8 @@
             "wet",
             "formant",
             "flex",
-            "humanize"
+            "humanize",
+            "vel_sens"
           ]
         }
       }

@@ -83,6 +83,42 @@
       ]
     },
     {
+      "title": "MIDI Notes",
+      "lines": [
+        "Play notes at Belt",
+        "from pads, clips,",
+        "or a keyboard.",
+        "",
+        "HARMONY mode:",
+        "held notes become",
+        "the harmony - hold",
+        "a chord, sing, the",
+        "voices sing those",
+        "exact notes. Clip",
+        "chords keep going",
+        "under an overtake.",
+        "",
+        "TARGET mode: your",
+        "voice is pulled to",
+        "the held note.",
+        "Play the melody,",
+        "sing approximately.",
+        "",
+        "Mode: Harmony page",
+        "knob 8, or chain",
+        "Shift+knob 5.",
+        "Vel Sens (Setup",
+        "knob 6) maps",
+        "velocity to voice",
+        "level.",
+        "",
+        "Control notes:",
+        "0 = HARD while held",
+        "1 = full doubler",
+        "2 = mute harmonies"
+      ]
+    },
+    {
       "title": "Pads",
       "lines": [
         "68-71: harmony",
