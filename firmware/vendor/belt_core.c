@@ -108,19 +108,8 @@ struct belt {
     int formant;          /* -100..100 -> +/- half octave */
     int wet;              /* 0-100 corrected vs dry lead */
     int hard;             /* performance override: instant, full correction */
-    int midi_harm;        /* 1 = harmony voices sing held MIDI notes (keyboard
-                           * harmonizer, "Hide and Seek"), not harm1-4 */
-    int lead;             /* 0-100 level of the lead (corrected + dry); 0 =
-                           * only the harmonies are heard */
     int monitor;          /* 0 = output muted (feedback guard, never saved) */
     int hw_input;         /* set by the gen wrapper: mic guard applies */
-
-    /* ---- MIDI note harmonizer: one held note per harmony voice ----
-     * Tracked whether or not midi_harm is on, so switching it on with a
-     * chord already down sings that chord. -1 = voice free. */
-    int      vnote[BELT_HARMONIES];
-    uint32_t vage[BELT_HARMONIES];     /* note-on order, for stealing */
-    uint32_t note_seq;
 
     /* ---- MIDI CC control ---- */
     uint8_t  cc_last[3];  /* last external CC accepted (duplicate guard) */
@@ -274,8 +263,6 @@ belt_t *belt_create(const host_api_v1_t *host) {
     b->key = 0; b->scale = 1;            /* C Major */
     b->retune = 25; b->amount = 100; b->flex = 0; b->humanize = 30;
     b->harm_level = 80; b->spread = 70; b->double_amt = 0;
-    b->midi_harm = 0; b->lead = 100;
-    for (int i = 0; i < BELT_HARMONIES; i++) b->vnote[i] = -1;
     b->formant = 0; b->wet = 100; b->monitor = 1;
 
     /* start the clock late enough that (w - LATENCY - grain reach) never
@@ -453,9 +440,8 @@ static void belt_update_targets(belt_t *b, int frames) {
     /* lead: output = note_slow + off + humanize*residue */
     float lead_out = b->note_slow + b->lead_off + hum01 * residue;
     float wet01 = (float)b->wet / 100.0f;
-    float lead01 = (float)b->lead / 100.0f;
     b->v[0].ratio_tgt = (lead_out - b->note_inst) / 12.0f;
-    b->v[0].gain_tgt = wet01 * lead01;
+    b->v[0].gain_tgt = wet01;
     b->v[0].pan = 0.0f;
 
     /* harmonies: track the fully-quantized note, carry half the vibrato */
@@ -465,15 +451,10 @@ static void belt_update_targets(belt_t *b, int frames) {
     for (int i = 0; i < BELT_HARMONIES; i++) {
         belt_voice_t *v = &b->v[1 + i];
         int itv = b->harm[i];
-        int on = b->midi_harm ? b->vnote[i] >= 0 : itv != ITV_OFF;
-        if (!on) {
+        if (itv == ITV_OFF) {
             v->gain_tgt = 0.0f;
         } else {
-            /* MIDI mode: the held key, exactly (no key/scale snapping: the
-             * keyboard is the scale). Grains reach +/-2 octaves from the
-             * sung pitch (ratio clamp in belt_process); beyond that the
-             * voice stops following. */
-            float hn = b->midi_harm ? (float)b->vnote[i] : harm_target(b, q, itv);
+            float hn = harm_target(b, q, itv);
             float cents = (v->det_cents + v->wander) * hum01;
             float out = hn + cents / 100.0f + 0.5f * hum01 * residue;
             v->ratio_tgt = (out - b->note_inst) / 12.0f;
@@ -637,10 +618,10 @@ void belt_process(belt_t *b, const int16_t *in, int16_t *out, int frames) {
     }
 
     /* 6. mix accumulator + latency-matched dry, clear behind ourselves */
-    float dry01 = (1.0f - (float)b->wet / 100.0f) * (float)b->lead / 100.0f;
+    float dry01 = 1.0f - (float)b->wet / 100.0f;
     uint64_t rd = b->w - (uint64_t)frames;
     int mute = !b->monitor;
-    int limit_on = b->wet > 0 || b->double_amt > 0 || b->midi_harm;
+    int limit_on = b->wet > 0 || b->double_amt > 0;
     for (int i = 0; i < BELT_HARMONIES; i++)
         if (b->harm[i] != ITV_OFF) limit_on = 1;
     for (int i = 0; i < frames; i++) {
@@ -689,8 +670,6 @@ static int param_table(belt_t *b, param_map_t *t) {
     t[n++] = (param_map_t){ "formant",    &b->formant,    -100, 100 };
     t[n++] = (param_map_t){ "wet",        &b->wet,        0, 100 };
     t[n++] = (param_map_t){ "hard",       &b->hard,       0, 1 };
-    t[n++] = (param_map_t){ "midi_harm",  &b->midi_harm,  0, 1 };
-    t[n++] = (param_map_t){ "lead",       &b->lead,       0, 100 };
     return n;
 }
 
@@ -698,7 +677,7 @@ static int param_table(belt_t *b, param_map_t *t) {
  * table. CC 20..35 map to param_table entries 0..15 in order:
  *   20 key   21 scale  22 retune  23 amount  24 flex    25 humanize
  *   26 harm1 27 harm2  28 harm3   29 harm4   30 harm_level  31 spread
- *   32 double_amt  33 formant  34 wet  35 hard  36 midi_harm  37 lead
+ *   32 double_amt  33 formant  34 wet  35 hard
  * The 0-127 CC value scales linearly into each param's range.
  *
  * Sources: in a chain slot the host delivers one external CC twice when the
@@ -709,42 +688,11 @@ static int param_table(belt_t *b, param_map_t *t) {
  */
 #define BELT_CC_BASE 20
 
-/* Note on/off -> harmony voices, omni. A note already held is ignored (the
- * chain-slot double delivery above would otherwise take two voices); a fifth
- * note steals the voice holding the oldest one. */
-static void midi_note(belt_t *b, int note, int on) {
-    for (int i = 0; i < BELT_HARMONIES; i++)
-        if (b->vnote[i] == note) {
-            if (!on) b->vnote[i] = -1;
-            return;
-        }
-    if (!on) return;
-    int pick = -1;
-    for (int i = 0; i < BELT_HARMONIES && pick < 0; i++)
-        if (b->vnote[i] < 0) pick = i;
-    if (pick < 0) {
-        pick = 0;
-        for (int i = 1; i < BELT_HARMONIES; i++)
-            if ((int32_t)(b->vage[i] - b->vage[pick]) < 0) pick = i;
-    }
-    b->vnote[pick] = note;
-    b->vage[pick] = ++b->note_seq;
-}
-
 void belt_on_midi(belt_t *b, const uint8_t *msg, int len, int source) {
     if (!b || !msg || len < 3) return;
+    if ((msg[0] & 0xF0) != 0xB0) return;
     if (source != MOVE_MIDI_SOURCE_EXTERNAL &&
         source != MOVE_MIDI_SOURCE_FX_BROADCAST) return;
-    int st = msg[0] & 0xF0;
-    if (st == 0x90 || st == 0x80) {
-        midi_note(b, msg[1] & 0x7F, st == 0x90 && msg[2] > 0);
-        return;
-    }
-    if (st != 0xB0) return;
-    if (msg[1] == 120 || msg[1] == 123) {        /* all sound / all notes off */
-        for (int i = 0; i < BELT_HARMONIES; i++) b->vnote[i] = -1;
-        return;
-    }
 
     if (msg[0] == b->cc_last[0] && msg[1] == b->cc_last[1] &&
         msg[2] == b->cc_last[2] && b->w - b->cc_last_w <= 256)
@@ -831,7 +779,7 @@ int belt_get_param(belt_t *b, const char *key, char *buf, int buf_len) {
     if (!strcmp(key, "status")) {
         int mask = 0;
         for (int i = 0; i < BELT_HARMONIES; i++)
-            if (b->midi_harm ? b->vnote[i] >= 0 : b->harm[i] != ITV_OFF) mask |= 1 << i;
+            if (b->harm[i] != ITV_OFF) mask |= 1 << i;
         return snprintf(buf, (size_t)buf_len, "%d:%d:%d:%d",
                         (int)lrintf(b->note_inst * 10.0f),
                         (int)lrintf(b->cents_err),
@@ -844,31 +792,12 @@ int belt_get_param(belt_t *b, const char *key, char *buf, int buf_len) {
         return snprintf(buf, (size_t)buf_len, "%.2f", (double)b->note_inst);
     if (!strcmp(key, "detected_freq"))
         return snprintf(buf, (size_t)buf_len, "%.2f", (double)b->f_inst);
-    if (!strcmp(key, "chord")) {
-        /* held MIDI notes per harmony voice, for a display: "C4 E4 G4 --" */
-        static const char *const nm[12] = { "C", "C#", "D", "D#", "E", "F",
-                                            "F#", "G", "G#", "A", "A#", "B" };
-        int w = 0;
-        buf[0] = '\0';
-        for (int i = 0; i < BELT_HARMONIES; i++) {
-            int nn = b->vnote[i];
-            if (nn < 0) app(buf, buf_len, &w, "%s--", i ? " " : "");
-            else app(buf, buf_len, &w, "%s%s%d", i ? " " : "", nm[nn % 12], nn / 12 - 1);
-        }
-        return w;
-    }
     if (!strcmp(key, "harm_note")) {
         /* MIDI note of the first enabled harmony voice, or the corrected
          * lead's quantized target when no harmony is on: the note Belt is
          * singing that the input is not. Read-only, for the Daisy CV outs. */
         float n = b->q_note;
         for (int i = 0; i < BELT_HARMONIES; i++) {
-            if (b->midi_harm) {
-                /* MIDI mode: the lowest held note (the chord's root, usually) */
-                if (b->vnote[i] >= 0 && (n == b->q_note || b->vnote[i] < n))
-                    n = (float)b->vnote[i];
-                continue;
-            }
             if (b->harm[i] != ITV_OFF) {
                 n = harm_target(b, b->q_note, b->harm[i]);
                 break;

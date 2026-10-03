@@ -411,63 +411,6 @@ int main(void) {
         printf("test 16 midi cc control   -> ok\n");
     }
 
-    /* ---- 17. MIDI keyboard harmonizer ("Hide and Seek"): held notes are
-     * the harmony pitches, lead 0 mutes the sung voice ---- */
-    reset_defaults();
-    {
-        uint8_t m[3];
-        #define NOTE(st, n, v) (m[0] = (st), m[1] = (n), m[2] = (v), \
-                                belt_on_midi(B, m, 3, MOVE_MIDI_SOURCE_EXTERNAL))
-        sp("harm1", "7");                 /* must be ignored in MIDI mode */
-        sp("midi_harm", "1");
-        sp("lead", "0");
-        sp("double_amt", "0");
-        NOTE(0x90, 60, 100);              /* C4 261.6 */
-        NOTE(0x90, 64, 100);              /* E4 329.6 */
-        NOTE(0x90, 67, 100);              /* G4 392.0 */
-        NOTE(0x90, 67, 100);              /* duplicate delivery: no 4th voice */
-        /* A sine's spectrum is one peak at 220 Hz, and TD-PSOLA keeps the
-         * input's spectral envelope, so the farther a voice moves from 220 the
-         * quieter it gets ON THIS SIGNAL (alone: C 59, E 25, G 2, C5 0.02 --
-         * the existing +Oct test shows the same). A voice has harmonics
-         * everywhere; this is a test-signal limit, not the harmonizer's. */
-        run_sine(220.0, 0.35, 2 * sec);
-        double c = tone_power(261.63, 8192), e = tone_power(329.63, 8192),
-               g = tone_power(392.00, 8192), a = tone_power(220.0, 8192),
-               itv = tone_power(277.18, 8192);   /* what harm1 +3rd would sing */
-        printf("test 17 midi chord C-E-G  -> C=%.4f E=%.4f G=%.4f sung A=%.4f harm1=%.4f chord=\"%s\"\n",
-               c, e, g, a, itv, gp("chord"));
-        assert(c > 4.0 * a && e > 4.0 * a && g > 4.0 * a);   /* lead muted */
-        assert(c > 4.0 * itv);                               /* harm1 ignored */
-        assert(!strcmp(gp("chord"), "C4 E4 G4 --"));
-        assert(fabs(atof(gp("harm_note")) - 60.0) < 0.01); /* lowest held */
-
-        NOTE(0x80, 64, 0);                /* release E */
-        NOTE(0x90, 62, 0);                /* note-on vel 0 = off, never held */
-        run_sine(220.0, 0.35, sec);
-        double e2 = tone_power(329.63, 8192), c2 = tone_power(261.63, 8192);
-        printf("test 17b release E        -> E=%.4f (was %.4f) C=%.4f chord=\"%s\"\n", e2, e, c2, gp("chord"));
-        assert(e2 < 0.25 * e && c2 > 4.0 * e2);
-        assert(!strcmp(gp("chord"), "C4 -- G4 --"));
-
-        NOTE(0x90, 69, 100); NOTE(0x90, 71, 100); NOTE(0x90, 72, 100);
-        printf("test 17c 5 notes, steal   -> chord=\"%s\"\n", gp("chord"));
-        assert(!strcmp(gp("chord"), "C5 A4 G4 B4"));      /* C4 (oldest) stolen */
-
-        m[0] = 0xB0; m[1] = 123; m[2] = 0;
-        belt_on_midi(B, m, 3, MOVE_MIDI_SOURCE_EXTERNAL);
-        run_sine(220.0, 0.35, sec);
-        double rest = out_rms(8192);
-        printf("test 17d all notes off    -> chord=\"%s\" rms=%.5f\n", gp("chord"), rest);
-        assert(!strcmp(gp("chord"), "-- -- -- --") && rest < 0.005);
-
-        sp("lead", "100");
-        run_sine(220.0, 0.35, sec);
-        printf("test 17e lead back        -> rms=%.4f\n", out_rms(8192));
-        assert(out_rms(8192) > 0.05);
-        #undef NOTE
-    }
-
     belt_destroy(B);
     printf("\nall belt sim tests passed\n");
     return 0;
