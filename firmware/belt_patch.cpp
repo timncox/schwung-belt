@@ -16,7 +16,7 @@
  *    latency the alignment maths assumes. Everything else follows.
  *    UNVERIFIED BY EAR -- this is the first thing to listen for.
  *
- * 2. CONTROLS. The engine already exposes all 16 params over MIDI CC 20..35
+ * 2. CONTROLS. The engine already exposes all 20 params over MIDI CC 20..39
  *    with a linear 0-127 scale into each param's own range (see the comment
  *    above param_table in belt_core.c). Rather than duplicate those ranges
  *    here -- formant alone is -100..100 while the rest are 0..100 -- the four
@@ -85,34 +85,49 @@ static uint8_t __attribute__((section(".heap"), aligned(32))) g_pool[192u * 1024
 
 /* ---- control surface ---------------------------------------------------- */
 
-/* CC 20..35, in param_table order. Four pages of four. */
-#define CC_BASE 20
-static const char *const PARAM_NAME[16] = {
+/* CC 20..39, in param_table order. Five pages of four. */
+#define CC_BASE  20
+#define N_PARAMS 20
+static const char *const PARAM_NAME[N_PARAMS] = {
     "key",  "scale", "retn", "amnt",
     "flex", "hmnz",  "hrm1", "hrm2",
     "hrm3", "hrm4",  "hlvl", "sprd",
     "dbl",  "form",  "wet",  "hard",
+    "midi", "vsns",  "lead", "hmod",
 };
 /* The engine's own names for the same sixteen, in the same order, for
  * belt_get_param. PARAM_NAME above is only a four-letter screen label: looking
  * a value up by the label fails for eleven of the sixteen, belt_get_param then
  * writes nothing, and the screen printed whatever was on the stack (first
  * rack-powered run, 2026-09-22: "values wouldn't move or sometimes move"). */
-static const char *const ENGINE_KEY[16] = {
+static const char *const ENGINE_KEY[N_PARAMS] = {
     "key",  "scale",    "retune", "amount",
     "flex", "humanize", "harm1",  "harm2",
     "harm3", "harm4",   "harm_level", "spread",
     "double_amt", "formant", "wet", "hard",
+    "midi_mode", "vel_sens", "lead", "hold_mode",
 };
+/* Enum params shown by name instead of number. */
+static const char *const MIDI_MODE_NAME[3] = { "Off", "Harm", "Trgt" };
+static const char *const HOLD_MODE_NAME[2] = { "Frz", "Lock" };
 /* Four param pages, then MODS: push-and-turn there opens the module picker,
  * the same gesture as the "mods" menu item on every other Patch module. MODS
  * has no params, so every g_page * 4 index below is guarded against it. */
-#define P_MODS  4
-#define N_PAGES 5
-static const char *const PAGE_NAME[N_PAGES] = { "TUNE", "HARM A", "HARM B", "VOICE", "MODS" };
+/* CHORD: the engine's MIDI keyboard harmonizer (schwung-belt PR #8 +
+ * feat/chord-only + feat/hold, vendored from feat/hold a86849c). midi Harm
+ * (the power-up mode) = each note held on the TRS MIDI input pins a harmony
+ * voice to that pitch; voices with no note keep their hrm1-4 interval. Trgt
+ * = the newest held note is the correction target. vsns = velocity -> voice
+ * level, lead = sung voice level (0 = chord only), hmod = what HOLD does
+ * (Freeze / Lock; HOLD itself is a performance param with no control here
+ * yet). Hide and Seek: midi Harm, hrm1-4 Off, lead 0. */
+#define P_CHORD 4
+#define P_MODS  5
+#define N_PAGES 6
+static const char *const PAGE_NAME[N_PAGES] = { "TUNE", "HARM A", "HARM B", "VOICE", "CHORD", "MODS" };
 
-static int  g_page;                 /* 0..3 params, 4 = MODS */
-static int  g_cc[16];               /* engine's value per param on the CC scale, 0..127 */
+static int  g_page;                 /* 0..4 params, 5 = MODS */
+static int  g_cc[N_PARAMS];         /* engine's value per param on the CC scale, 0..127 */
 static bool g_live[4];              /* has this knob picked up on this page? */
 static int  g_knob_at[4];           /* last raw knob reading, 0..127 */
 
@@ -146,7 +161,7 @@ static void send_cc(int idx, int val127)
 static void seed_cc_from_engine(void)
 {
     char was[12], buf[12];
-    for(int i = 0; i < 16; i++)
+    for(int i = 0; i < N_PARAMS; i++)
     {
         if(belt_get_param(B, ENGINE_KEY[i], was, sizeof(was)) < 0) continue;
         send_cc(i, 0);
@@ -225,7 +240,8 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
  * laptop: the pitch tracker is already there, so expose it.
  *
  *   CV Out 1   detected pitch as 1V/oct, 0 V = C2 (65.406 Hz)
- *   CV Out 2   the first enabled harmony voice's note, 1V/oct on the same
+ *   CV Out 2   the first enabled harmony voice's note (see the engine's
+ *              harm_note for MIDI mode), 1V/oct on the same
  *              scale -- or the corrected lead's quantized target when no
  *              harmony is on
  *   Gate Out   high while the tracker says the input is voiced
@@ -331,9 +347,25 @@ static void draw(void)
         char  val[12];
         if(belt_get_param(B, ENGINE_KEY[idx], val, sizeof(val)) < 0)
             snprintf(val, sizeof(val), "?");
+        else if(idx == 16 && atoi(val) >= 0 && atoi(val) < 3)
+            snprintf(val, sizeof(val), "%s", MIDI_MODE_NAME[atoi(val)]);
+        else if(idx == 19 && atoi(val) >= 0 && atoi(val) < 2)
+            snprintf(val, sizeof(val), "%s", HOLD_MODE_NAME[atoi(val)]);
         snprintf(line, sizeof(line), "%-4s %-5s%s",
                  PARAM_NAME[idx], val, g_live[k] ? "" : " *");
         hw.display.SetCursor(0, 16 + k * 10);
+        hw.display.WriteString(line, Font_6x8, true);
+    }
+
+    /* CHORD: how many MIDI notes are held (status field 5). y 56 is the
+     * last row a Font_6x8 line fits (56 + 8 = 64). */
+    char st[48];
+    if(g_page == P_CHORD && belt_get_param(B, "status", st, sizeof(st)) >= 0)
+    {
+        int f[7] = {0};
+        sscanf(st, "%d:%d:%d:%d:%d:%d:%d", &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6]);
+        snprintf(line, sizeof(line), "held %d", f[4]);
+        hw.display.SetCursor(0, 56);
         hw.display.WriteString(line, Font_6x8, true);
     }
 
@@ -424,19 +456,28 @@ int main(void)
             g_knob_at[k] = raw;
         }
 
-        /* External MIDI CC drives the same 16 params directly. */
+        /* External MIDI: CCs drive the same params directly; notes go to the
+         * engine's harmonizer (it tracks them in every midi mode, so nothing
+         * is stranded by a mode change). */
         hw.midi.Listen();
         while(hw.midi.HasEvents())
         {
             MidiEvent ev = hw.midi.PopEvent();
-            if(ev.type == ControlChange)
+            if(ev.type == NoteOn || ev.type == NoteOff)
+            {
+                uint8_t msg[3] = { (uint8_t)((ev.type == NoteOn ? 0x90 : 0x80) | (ev.channel & 0x0F)),
+                                   (uint8_t)ev.data[0],
+                                   (uint8_t)ev.data[1] };
+                belt_on_midi(B, msg, 3, MOVE_MIDI_SOURCE_EXTERNAL);
+            }
+            else if(ev.type == ControlChange)
             {
                 uint8_t msg[3] = { (uint8_t)(0xB0 | (ev.channel & 0x0F)),
                                    (uint8_t)ev.data[0],
                                    (uint8_t)ev.data[1] };
                 belt_on_midi(B, msg, 3, MOVE_MIDI_SOURCE_EXTERNAL);
                 int idx = (int)ev.data[0] - CC_BASE;
-                if(idx >= 0 && idx < 16)
+                if(idx >= 0 && idx < N_PARAMS)
                 {
                     g_cc[idx] = ev.data[1];
                     /* Last touched wins. A live knob on this param would

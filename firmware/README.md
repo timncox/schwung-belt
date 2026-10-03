@@ -5,6 +5,14 @@ a 20 HP Eurorack module built on the Daisy Seed. This directory is the Daisy
 shim; it is the counterpart of `src/belt_fx.c`, which is the Move shim. The
 engine is vendored, not forked.
 
+Since 2026-10-02 `vendor/belt_core.c` is schwung-belt **`feat/hold` @ a86849c**
+(PR #8's played harmony + `lead` + HOLD), not `src/belt_core.c` (= main), so
+the Patch gets the MIDI keyboard harmonizer before PR #8 merges. Two Patch
+carries on top, re-apply them when re-vendoring: b5ddc87 (YIN lag bounds
+derived from YIN_SR: the 85 Hz floor at 48k) and e2e8463 (`harm_note` getter
+for CV Out 2, extended to report a held MIDI note in Harmony mode). Once PR #8
+and its follow-ups land on main, go back to copying `src/`.
+
 ## Build
 
 ```sh
