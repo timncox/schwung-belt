@@ -28,7 +28,9 @@
  *    the Patch's knobs are absolute. Without pickup, changing page would slam
  *    four params to wherever the pots happen to sit -- the same trap that made
  *    persistence impossible on the Versio panel. A knob here is inert until it
- *    crosses the value it is taking over, and the display says so.
+ *    crosses the value it is taking over, and the display says so. That holds
+ *    from power-up (g_cc[] is seeded from the engine's defaults) and after an
+ *    external MIDI CC (last touched wins: the CC re-arms pickup on its knob).
  */
 #include "daisy_patch.h"
 #include "patch_alloc.h"
@@ -51,7 +53,7 @@ static belt_t    *B;
 static host_api_v1_t HOST;
 
 /* 256 since 2026-09-22, = YIN_HOP. At 128 the pitch analysis (YIN, W 512 x
- * tau 260) landed in every OTHER block, so half the blocks carried it and
+ * tau 260; 283 since 2026-10-02, the 48k-correct 85 Hz floor) landed in every OTHER block, so half the blocks carried it and
  * overran while the average sat in the 70s: the header meter read c80/99,
  * then c73/99 with the pool in D2 and -O3. One hop per block spreads that
  * evenly. The engine is frame-count agnostic (ingest, analysis and grain
@@ -110,12 +112,11 @@ static const char *const ENGINE_KEY[16] = {
 static const char *const PAGE_NAME[N_PAGES] = { "TUNE", "HARM A", "HARM B", "VOICE", "MODS" };
 
 static int  g_page;                 /* 0..3 params, 4 = MODS */
-static int  g_cc[16];               /* last CC value sent per param, 0..127 */
+static int  g_cc[16];               /* engine's value per param on the CC scale, 0..127 */
 static bool g_live[4];              /* has this knob picked up on this page? */
 static int  g_knob_at[4];           /* last raw knob reading, 0..127 */
 
 /* A knob takes over only once it crosses the value it is replacing. */
-#define PICKUP_SLOP 2
 
 static void page_reset(void)
 {
@@ -132,6 +133,32 @@ static void send_cc(int idx, int val127)
     uint8_t msg[3] = { 0xB0, (uint8_t)(CC_BASE + idx), (uint8_t)val127 };
     belt_on_midi(B, msg, 3, MOVE_MIDI_SOURCE_EXTERNAL);
     g_cc[idx] = val127;
+}
+
+/* Seed g_cc[] with the engine's power-up values, so pickup applies from boot
+ * like everywhere else (it used to start at -1, "unknown", and the first knob
+ * move > 2 took over without crossing anything). Ranges still live only in
+ * the engine: each param's lo/hi is read back by sending CC 0 and CC 127, and
+ * the power-up value is then restored -- all before audio starts. Rounding to
+ * nearest inverts belt_on_midi's lo + (cc * (hi - lo) + 63) / 127 exactly for
+ * ranges of <= 127 steps. formant (-100..100) has more steps than CC values,
+ * so its 0 is not reachable by CC at all: it seeds to 64 (= +1), the nearest. */
+static void seed_cc_from_engine(void)
+{
+    char was[12], buf[12];
+    for(int i = 0; i < 16; i++)
+    {
+        if(belt_get_param(B, ENGINE_KEY[i], was, sizeof(was)) < 0) continue;
+        send_cc(i, 0);
+        belt_get_param(B, ENGINE_KEY[i], buf, sizeof(buf));
+        int lo = atoi(buf);
+        send_cc(i, 127);
+        belt_get_param(B, ENGINE_KEY[i], buf, sizeof(buf));
+        int hi = atoi(buf);
+        belt_set_param(B, ENGINE_KEY[i], was);
+        int v = atoi(was);
+        g_cc[i] = hi > lo ? ((v - lo) * 127 + (hi - lo) / 2) / (hi - lo) : 0;
+    }
 }
 
 /* ---- audio -------------------------------------------------------------- */
@@ -343,13 +370,14 @@ int main(void)
         for(;;) {}
     }
 
+    seed_cc_from_engine();   /* before audio: it briefly moves each param */
+
     g_cpu.Init(hw.AudioSampleRate(), hw.AudioBlockSize());
     hw.StartAdc();
     hw.StartAudio(AudioCallback);
     hw.midi.StartReceive();
 
     page_reset();
-    for(int i = 0; i < 16; i++) g_cc[i] = -1;
 
     uint32_t last_draw = System::GetNow();
     uint32_t last_cpu  = last_draw;
@@ -383,14 +411,8 @@ int main(void)
             if(!g_live[k])
             {
                 int cur = g_cc[idx];
-                /* Unknown current value (nothing sent yet on this param):
-                 * wait for the knob to move before taking over. */
-                if(cur < 0)
-                {
-                    if(abs(raw - g_knob_at[k]) > PICKUP_SLOP) g_live[k] = true;
-                }
-                else if((g_knob_at[k] <= cur && raw >= cur)
-                        || (g_knob_at[k] >= cur && raw <= cur))
+                if((g_knob_at[k] <= cur && raw >= cur)
+                   || (g_knob_at[k] >= cur && raw <= cur))
                 {
                     g_live[k] = true;
                 }
@@ -414,7 +436,15 @@ int main(void)
                                    (uint8_t)ev.data[1] };
                 belt_on_midi(B, msg, 3, MOVE_MIDI_SOURCE_EXTERNAL);
                 int idx = (int)ev.data[0] - CC_BASE;
-                if(idx >= 0 && idx < 16) g_cc[idx] = ev.data[1];
+                if(idx >= 0 && idx < 16)
+                {
+                    g_cc[idx] = ev.data[1];
+                    /* Last touched wins. A live knob on this param would
+                     * resend its own position on the next pass and undo the
+                     * CC at once; re-arm pickup so it has to cross the new
+                     * value before taking over again. */
+                    if(idx / 4 == g_page) g_live[idx % 4] = false;
+                }
             }
         }
 

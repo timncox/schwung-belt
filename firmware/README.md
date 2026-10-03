@@ -75,7 +75,8 @@ provably identical to the MIDI path. External MIDI CC works simultaneously.
 Patch's knobs are absolute. A knob is inert until it crosses the value it is
 taking over; the display marks un-picked-up knobs with `*`. Without this,
 changing page would slam four params to wherever the pots sit — the trap that
-made persistence impossible on the Versio panel.
+made persistence impossible on the Versio panel. This applies from power-up,
+and an external MIDI CC re-arms pickup on its knob (last touched wins).
 
 **Memory.** Belt's working set is ~128 KB (rings measured in `patch_alloc.h`),
 allocated once from a 192 KB bump pool. The pool is in SDRAM because nothing

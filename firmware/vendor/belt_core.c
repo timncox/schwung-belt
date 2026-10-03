@@ -31,17 +31,25 @@
 #define ACC_MASK  (ACC_RING - 1)
 #define MARKS     64                 /* recent pitch marks (time + period) */
 
-#define YIN_DEC    2                 /* analyze at 22050 Hz */
+#define YIN_DEC    2                 /* analyze at BELT_SR/2: 22050 Hz Move, 24000 Patch */
 #define YIN_SR     (BELT_SR / YIN_DEC)
 #define YIN_RING   4096
 #define YIN_MASK   (YIN_RING - 1)
-#define YIN_W      512               /* ~23 ms integration window */
-#define YIN_TAUMAX 260               /* 22050/85 Hz */
-#define YIN_TAUMIN 22                /* 22050/1000 Hz */
+#define YIN_W      512               /* ~23 ms (21 ms @ 48k) integration window */
+/* Lag bounds derive from YIN_SR so a BELT_SR rebase moves them too (the
+ * Patch's 48k rebase once left 260 here: a 92.3 Hz floor, a 1091 Hz top).
+ * Integer maths because they size arrays; 85 and 1000 are BELT_FMIN and
+ * BELT_FMAX, which are floats. TAUMAX rounds up so FMIN itself is inside
+ * the search: 260 @ 44.1k (unchanged), 283 @ 48k. TAUMIN rounds down:
+ * 22 @ 44.1k (unchanged), 24 @ 48k. */
+#define YIN_TAUMAX ((YIN_SR + 84) / 85)      /* ceil(YIN_SR / BELT_FMIN) */
+#define YIN_TAUMIN (YIN_SR / 1000)           /* floor(YIN_SR / BELT_FMAX) */
+_Static_assert((int)BELT_FMIN == 85 && (int)BELT_FMAX == 1000,
+               "YIN_TAUMAX/YIN_TAUMIN spell out BELT_FMIN/BELT_FMAX");
 #define YIN_HOP    256               /* input samples between analyses */
 
-#define T_MAX ((float)BELT_SR / BELT_FMIN)   /* ~519 samples */
-#define T_MIN ((float)BELT_SR / BELT_FMAX)   /* ~44 samples */
+#define T_MAX ((float)BELT_SR / BELT_FMIN)   /* ~519 samples @ 44.1k, ~565 @ 48k */
+#define T_MIN ((float)BELT_SR / BELT_FMAX)   /* ~44 samples @ 44.1k, 48 @ 48k */
 
 #define RMS_GATE 0.0015f             /* ~-56 dBFS voicing gate */
 
@@ -384,7 +392,8 @@ static void belt_analyze(belt_t *b) {
     } else {
         b->jump_frames = 0;
     }
-    /* ~120 ms one-pole at the 172 Hz analysis rate */
+    /* one-pole at the BELT_SR/YIN_HOP analysis rate: ~126 ms at 172 Hz
+     * (44.1k), ~116 ms at 187.5 Hz (48k) */
     b->note_slow += (b->note_inst - b->note_slow) * 0.045f;
 }
 

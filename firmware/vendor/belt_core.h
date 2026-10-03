@@ -6,7 +6,7 @@
  *   - belt_fx.c   audio_fx_api_v2 wrapper (chain slots + Master FX slots)
  *   - belt_gen.c  plugin_api_v2 wrapper (sound_generator reading hardware input)
  *
- * DSP model: one YIN pitch analysis (decimated to 22.05 kHz) drives a train
+ * DSP model: one YIN pitch analysis (decimated 2x, to 24 kHz here) drives a train
  * of pitch marks; every output voice is a TD-PSOLA grain stream reading the
  * same marks — 1 corrected lead, 4 diatonic harmony voices, 2 doubler
  * streams — so N voices cost barely more than one analysis. Formant control
