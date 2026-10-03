@@ -180,6 +180,7 @@
             },
             {
               "key": "harm_level",
+              "short_name": "Harm",
               "name": "Harm Level",
               "type": "float",
               "min": 0,
@@ -202,6 +203,7 @@
             },
             {
               "key": "double_amt",
+              "short_name": "DBLR",
               "name": "Doubler",
               "type": "float",
               "min": 0,
@@ -239,6 +241,7 @@
           "params": [
             {
               "key": "hard",
+              "short_name": "Tune",
               "name": "Hard Tune",
               "type": "enum",
               "options": [
@@ -260,6 +263,7 @@
             },
             {
               "key": "formant",
+              "short_name": "FRMNT",
               "name": "Formant",
               "type": "int",
               "min": -100,
