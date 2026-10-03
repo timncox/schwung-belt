@@ -119,8 +119,10 @@ static const char *const HOLD_MODE_NAME[2] = { "Frz", "Lock" };
  * voice to that pitch; voices with no note keep their hrm1-4 interval. Trgt
  * = the newest held note is the correction target. vsns = velocity -> voice
  * level, lead = sung voice level (0 = chord only), hmod = what HOLD does
- * (Freeze / Lock; HOLD itself is a performance param with no control here
- * yet). Hide and Seek: midi Harm, hrm1-4 Off, lead 0. */
+ * (Freeze / Lock). HOLD itself is GATE IN 1: high = the harmony voices stay
+ * on their notes while you sing on (the Lab build's J8 Hold-gate option;
+ * the engine's "hold" is a performance param, never saved). Hide and Seek:
+ * midi Harm, hrm1-4 Off, lead 0. */
 #define P_CHORD 4
 #define P_MODS  5
 #define N_PAGES 6
@@ -357,14 +359,16 @@ static void draw(void)
         hw.display.WriteString(line, Font_6x8, true);
     }
 
-    /* CHORD: how many MIDI notes are held (status field 5). y 56 is the
-     * last row a Font_6x8 line fits (56 + 8 = 64). */
+    /* CHORD: how many MIDI notes are held (status field 5) and the HOLD
+     * state (field 7: 0 off, 1 locked, 2 frozen, 3 freeze fading out). y 56
+     * is the last row a Font_6x8 line fits (56 + 8 = 64). */
     char st[48];
     if(g_page == P_CHORD && belt_get_param(B, "status", st, sizeof(st)) >= 0)
     {
+        static const char *const HOLD_STATE[4] = { "", "  HOLD lock", "  HOLD frz", "  HOLD fade" };
         int f[7] = {0};
         sscanf(st, "%d:%d:%d:%d:%d:%d:%d", &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6]);
-        snprintf(line, sizeof(line), "held %d", f[4]);
+        snprintf(line, sizeof(line), "held %d%s", f[4], HOLD_STATE[f[6] & 3]);
         hw.display.SetCursor(0, 56);
         hw.display.WriteString(line, Font_6x8, true);
     }
@@ -486,6 +490,19 @@ int main(void)
                      * value before taking over again. */
                     if(idx / 4 == g_page) g_live[idx % 4] = false;
                 }
+            }
+        }
+
+        /* Gate In 1 = HOLD, level-sensitive like the Lab's J8 Hold gate.
+         * Only a change is sent, so the engine's hold edge (snapshot the
+         * notes, capture the freeze slice) happens once per gate edge. */
+        {
+            static bool hold_was = false;
+            bool hold = hw.gate_input[DaisyPatch::GATE_IN_1].State();
+            if(hold != hold_was)
+            {
+                belt_set_param(B, "hold", hold ? "1" : "0");
+                hold_was = hold;
             }
         }
 
