@@ -295,6 +295,17 @@
               "step": 5,
               "unit": "%",
               "display_format": "%.0f"
+            },
+            {
+              "key": "lead",
+              "name": "Lead",
+              "type": "float",
+              "min": 0,
+              "max": 100,
+              "default": 100,
+              "step": 5,
+              "unit": "%",
+              "display_format": "%.0f"
             }
           ],
           "knobs": [
@@ -303,7 +314,8 @@
             "formant",
             "flex",
             "humanize",
-            "vel_sens"
+            "vel_sens",
+            "lead"
           ]
         }
       }

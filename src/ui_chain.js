@@ -112,11 +112,13 @@ const KNOBS2 = [
       speechOpts: ['off', 'played harmony', 'target note'] },
     { key: 'vel_sens',  name: 'Vel',  min: 0, max: 100, step: 5,
       speech: 'Velocity sensitivity', unit: ' percent' },
-    null, null
+    { key: 'lead',      name: 'Lead', min: 0, max: 100, step: 5,
+      speech: 'Lead level', unit: ' percent' },
+    null
 ];
 
 let knobValues = [0, 1, 25, 100, 80, 0, 0, 100];
-let knob2Values = [30, 0, 70, 1, 1, 50, 0, 0];
+let knob2Values = [30, 0, 70, 1, 1, 50, 100, 0];
 let harm = [0, 0, 0, 0];
 /* interval each voice returns to when toggled back on */
 let lastItv = [7, 9, 11, 1];

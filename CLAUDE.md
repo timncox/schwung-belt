@@ -78,6 +78,10 @@ harm1-4 (interval enum: Off/-Oct/-6th/-5th/-4th/-3rd/Unis/+3rd/+4th/+5th/
 +6th/+Oct), harm_level, spread, double_amt, formant -100..100, wet.
 `hard` (instant full correction; Retune/Amount untouched),
 `midi_mode` (Off/Harmony/Target), `vel_sens` 0-100.
+`lead` 0-100 (default 100): scales everything lead-derived — the corrected
+lead voice, the dry path and the doubler. 0 = chord only (only harmony
+voices on held notes: the Hide and Seek / DigiTech Vocalist sound). A state
+blob without `lead` restores 100, not whatever the last patch left.
 `monitor` (0 mutes output; feedback guard; never preset-saved),
 `hw_input` (set by gen wrapper),
 `status` = "note10:cents:voiced:mask:held:hard"
@@ -160,10 +164,10 @@ Catalog PR to charlesvestal/schwung: only after hardware test (house rule).
 
 ## MIDI CC control
 
-`belt_on_midi` maps external CC 20–37 onto the 18 `param_table` entries in
+`belt_on_midi` maps external CC 20–38 onto the 19 `param_table` entries in
 order, 0–127 scaled linearly into each range (see README for the table).
 New params are APPENDED to `param_table` so shipped CC numbers never shift
-(`midi_mode` = 36, `vel_sens` = 37).
+(`midi_mode` = 36, `vel_sens` = 37, `lead` = 38).
 Rules, grounded in schwung's routing (verified in schwung src 2026-07-24):
 
 - Accept ONLY `MOVE_MIDI_SOURCE_EXTERNAL` and `MOVE_MIDI_SOURCE_FX_BROADCAST`

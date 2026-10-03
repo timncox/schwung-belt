@@ -19,6 +19,11 @@ line-in, or USB-C input. Named Belt because it makes you sound like you can.
   hands-free while another module owns the surface
 - **Target mode** — the held note becomes the correction target: play the
   melody, sing approximately, land exactly
+- **Chord only (LEAD 0)** — silence the lead and the dry voice so only the
+  played-harmony voices sound: every note you hold is your own voice
+  re-pitched to it, the Imogen Heap "Hide and Seek" sound (a DigiTech
+  Vocalist on its vocoder setting). Set the harmony intervals Off first so
+  only held notes sing. LEAD is on the Setup page, Shift knob 7 in a chain
 - **Tuner strip** — steps 1-12 show your note (green = in tune); press to set the key
 - **Flex / Humanize** — leave expressive slides alone, keep your vibrato
 
@@ -69,6 +74,7 @@ sends CC). The 0–127 CC value scales linearly across each parameter's range.
 | 27 | harm 2 | off..interval | 35 | hard | ≥64 = on |
 | | | | 36 | midi mode | off/harm/target |
 | | | | 37 | vel sens | 0–100 |
+| | | | 38 | lead | 0–100 (0 = chord only) |
 
 Channel notes:
 
