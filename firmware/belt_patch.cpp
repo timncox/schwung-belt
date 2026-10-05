@@ -110,8 +110,8 @@ static const char *const ENGINE_KEY[N_PARAMS] = {
 /* Enum params shown by name instead of number. */
 static const char *const MIDI_MODE_NAME[3] = { "Off", "Harm", "Trgt" };
 static const char *const HOLD_MODE_NAME[2] = { "Frz", "Lock" };
-/* Four param pages, then MODS: push-and-turn there opens the module picker,
- * the same gesture as the "mods" menu item on every other Patch module. MODS
+/* Four param pages, then MODS: a click there opens the module picker, the
+ * same gesture as the "mods" menu item on every other Patch module. MODS
  * has no params, so every g_page * 4 index below is guarded against it. */
 /* CHORD: the engine's MIDI keyboard harmonizer (schwung-belt PR #8 +
  * feat/chord-only + feat/hold, vendored from feat/hold a86849c). midi Harm
@@ -335,7 +335,7 @@ static void draw(void)
     if(g_page == P_MODS)
     {
         hw.display.SetCursor(0, 26);
-        hw.display.WriteString("push + turn:", Font_6x8, true);
+        hw.display.WriteString("click:", Font_6x8, true);
         hw.display.SetCursor(0, 36);
         hw.display.WriteString("  module picker", Font_6x8, true);
         hw.display.Update();
@@ -422,20 +422,34 @@ int main(void)
     {
         hw.ProcessAllControls();
 
-        /* Encoder turns pages; every page change re-arms pickup. On MODS,
-         * push-and-turn opens the module picker (module_picker.h), the same
-         * gesture as the "mods" item on every other Patch module. It returns
-         * only when the user backs out, after the encoder is released. */
-        int inc = hw.encoder.Increment();
-        if(inc && g_page == P_MODS && hw.encoder.Pressed())
+        /* Encoder turns pages; every page change re-arms pickup. On MODS a
+         * click (press and release, no turn) opens the module picker
+         * (module_picker.h), the same as a click on "mods" on every other
+         * Patch module. Since 2026-10-03: push-and-turn never worked on Tim's
+         * Patch (the switch opens while the knob turns). Edges only:
+         * Pressed() lags RisingEdge by 1 ms and drops out on a bounce. */
+        static bool enc_down = false, enc_turned = false;
+        if(hw.encoder.RisingEdge())
         {
-            picker::run(hw);
-            page_reset();   /* the knobs may have moved meanwhile */
+            enc_down   = true;
+            enc_turned = false;
         }
-        else if(inc)
+        int inc = hw.encoder.Increment();
+        if(inc)
         {
+            if(enc_down) enc_turned = true;
             g_page = ((g_page + inc) % N_PAGES + N_PAGES) % N_PAGES;
             page_reset();
+        }
+        if(hw.encoder.FallingEdge())
+        {
+            bool click = enc_down && !enc_turned;
+            enc_down   = false;
+            if(click && g_page == P_MODS)
+            {
+                picker::run(hw); /* returns only if the user backs out */
+                page_reset();    /* the knobs may have moved meanwhile */
+            }
         }
 
         /* Knobs -> CC, with pickup. MODS has no params. */
