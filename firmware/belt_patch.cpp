@@ -133,7 +133,12 @@ static int  g_cc[N_PARAMS];         /* engine's value per param on the CC scale,
 static bool g_live[4];              /* has this knob picked up on this page? */
 static int  g_knob_at[4];           /* last raw knob reading, 0..127 */
 
-/* A knob takes over only once it crosses the value it is replacing. */
+/* A knob takes over only once it crosses the value it is replacing -- or
+ * comes within PICKUP_SLACK of it. Real Patch knobs stop short of full scale
+ * (knob + CV summed through an op-amp), so a param at 127 (wet/lead/amnt
+ * power up at 100 %) could never be crossed: the knob stayed '*' forever
+ * (Tim, 2026-10-21, VOICE wet at 100; reproduced in patch-sim at 98 %). */
+#define PICKUP_SLACK 3
 
 static void page_reset(void)
 {
@@ -462,7 +467,8 @@ int main(void)
             {
                 int cur = g_cc[idx];
                 if((g_knob_at[k] <= cur && raw >= cur)
-                   || (g_knob_at[k] >= cur && raw <= cur))
+                   || (g_knob_at[k] >= cur && raw <= cur)
+                   || abs(raw - cur) <= PICKUP_SLACK)
                 {
                     g_live[k] = true;
                 }
