@@ -1,2 +1,18 @@
 build/
 .playwright-mcp/
+# --- secrets & local files (added 2026-11-02, GitHub migration) ---
+.claude/worktrees/
+.dev.vars
+.DS_Store
+.env
+.env.*
+.env*.local
+.vercel
+*.key
+*.p12
+*.p8
+*.pem
+node_modules/
+!.env.example
+!.env.*.example
+!.env.sample
